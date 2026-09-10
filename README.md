@@ -147,6 +147,9 @@ Yalnızca açık kaynak kütüphaneler kullanılmıştır.
 üzerinden yapılır ve API anahtarı yalnızca sunucu tarafında tutulur; arayüz model uç noktasına
 değil, kendi API'mize istek atar.
 
+Kullanılan tüm teknolojiler, kullanım amaçları ve lisanslarıyla birlikte
+[STACK.md](STACK.md) içinde listelenmiştir.
+
 ---
 
 ## Depo yapısı
