@@ -5,16 +5,18 @@ the reasoning in [PLAN.md](PLAN.md) rather than restating it here.
 
 | # | Decision | Deadline | Status |
 |---|---|---|---|
-| 1 | Time budget per person | Today | open |
-| 2 | Who owns the data layer | Today | open |
-| 3 | BDDK scope | Today | open |
-| 4 | Size of the data pool | Today | open |
-| 5 | Frontend framework | Today | open |
+| 1 | Time budget per person | Today | **dropped** — no fixed budget |
+| 2 | Who owns the data layer | Today | **contested** — see below |
+| 3 | BDDK scope | Today | **settled** — monthly only |
+| 4 | Size of the data pool | Today | **settled** — ~250, chosen backwards from a question list |
+| 5 | Frontend framework | Today | **settled** — React / Next.js |
+| 16 | Neo4j | Today | **contested** — recommend skipping |
+| 17 | AI in the data layer | Today | **settled** — build-time yes, runtime no |
 | 6 | How much the model may do | Day 1 | open |
 | 7 | Conversation state shape | Day 1 | open |
 | 8 | Output language | Day 1 | open |
 | 9 | Deflation convention | Day 3 | open |
-| 10 | Which "housing loan" | Day 3 | open |
+| 10 | Which "housing loan" | Day 3 | **decide before ingestion** |
 | 11 | Ragged edge policy | Day 3 | open |
 | 12 | Snapshot or live | Day 3 | open |
 | 13 | Behavior on a miss | Day 5 | open |
@@ -23,54 +25,104 @@ the reasoning in [PLAN.md](PLAN.md) rather than restating it here.
 
 ---
 
-## Today — these gate everything else
+## Settled
 
-### 1. Time budget per person
+### 1. Time budget per person — dropped
 
-Full-time for ten days, or evenings around jobs and classes? Four people at 3 h/day is
-~120 person-hours; four full-time is ~400. Those are different projects, and every scope
-decision below assumes an answer.
+No fixed hours. Everyone contributes when they can.
 
-- **Decision:**
+One ask: know roughly who is around on **Sat 12 and Sun 13 Sep**. The BDDK parsing and the
+de-cumulation gate both land that weekend, and those two days carry more risk than the rest
+of the week combined.
+
+### 3. BDDK scope — monthly bulletins only
+
+Weekly bulletins hold most of the parsing volume and the published demo scenario needs none
+of them. Add weekly only if Day 4 arrives on schedule. FinTürk province data is first on the
+cut list.
+
+### 4. Size of the data pool — ~250 series
+
+Chosen by working backwards, not by browsing EVDS: write down the published three-turn
+scenario plus the ten most likely adjacent questions a judge might ask, then pick the series
+that cover them.
+
+Coverage: credit by type (stock *and* flow), rates by loan and deposit type, TÜFE/ÜFE, house
+prices and residential sales, FX and reserves, deposits including KKM, banking aggregates
+(NPL, CAR, sector balance sheet), real-economy basics (industrial production, capacity
+utilisation, unemployment).
+
+This lands around 240–250 and gives a defensible answer to "why these?" — a question we will
+be asked.
+
 - **Owner:**
+
+### 5. Frontend — React / Next.js
+
+The API key never goes near it. Browser → FastAPI → MIA. No exceptions.
+
+- **Owner:**
+
+### 17. AI in the data layer — build-time yes, runtime no
+
+**Use AI heavily to build the pipeline.** Writing BDDK parsers, populating catalog rows,
+reading Turkish series names and footnotes to propose `measure_type` and `cumulative_mode`.
+This is a large accelerator and is how ten days becomes feasible.
+
+**Do not put AI inside the data path at runtime.** Every transform that touches a number is
+deterministic Python, tested and replayable.
+
+The reason is structural, not stylistic: the trust layer requires that every figure trace
+back to a transformation chain. If an LLM improvised the transformation, there is no chain —
+only an assertion that something happened. It also can't be unit-tested, can't be reproduced,
+and adds latency to every query. The one thing we are graded on hardest is the thing an LLM
+in the data path would quietly destroy.
+
+**The working pattern:** LLM proposes → deterministic tests verify → human adjudicates only
+what the tests can't settle.
+
+---
+
+## Contested — needs a call
 
 ### 2. Who owns the data layer
 
-~40% of the work and the only track that can silently produce a wrong number. Needs the
-strongest person on messy data, not whoever is free. Other tracks: agent core, tools,
-frontend + deploy.
+Current position: everyone splits it, no owner.
 
+**Parsing splits fine.** Files are naturally parallel — one person takes 2021 monthlies,
+another takes 2022, another builds catalog rows. Four people genuinely go faster here.
+
+**Classification does not split.** Deciding which series are cumulative is a judgment call
+made repeatedly, and it has to be made the same way every time. Four people doing it
+independently produce four standards for what counts as a January reset, and a gold layer
+nobody can vouch for.
+
+- **Recommend:** parsing stays distributed; one person owns the classification standard and
+  signs off on the gold build. Not a week of work — the deterministic tests resolve most
+  series automatically, leaving perhaps 10–20 genuinely ambiguous ones. Closer to an hour of
+  concentrated judgement than a full track.
 - **Decision:**
 - **Owner:**
 
-### 3. BDDK scope
+### 16. Neo4j
 
-Biggest single time lever in the project. Weekly bulletins hold most of the parsing volume
-and the published demo scenario needs none of them.
+Proposed as an addition. **Recommend against**, at least until after Day 5.
 
-- **Options:** monthly only · + weekly · + FinTürk province data
-- **Recommend:** monthly only for v1; add weekly if Day 4 arrives on schedule
-- **Decision:**
-- **Owner:**
+The test that matters: *what query do you need that DuckDB can't answer?*
 
-### 4. Size of the data pool
+Lineage is genuinely graph-shaped, so the instinct isn't wrong — but the graph is tiny. A few
+dozen nodes per analysis object, tracing columns through transforms back to sources. That's a
+Python object tree serialised to JSON in a DuckDB column. A graph database for forty nodes
+buys a talking point and costs a service to deploy, operate and debug during the tightest
+week of the project.
 
-"All EVDS series" is not a plan. Pick a number and a set of categories — credit by type,
-rates, TÜFE/ÜFE, house prices and sales, FX, deposits, NPL, industrial production — and be
-able to say why those.
+The organizers named DuckDB, LanceDB, Pandas, pypdf and Plotly. Neo4j isn't forbidden, but
+adding an unlisted heavyweight service when a listed one covers the need is a weak trade in
+front of judges who wrote that list. It's also one more thing that can be down on demo day.
 
-- **Recommend:** 200–300 curated series as the fast path, full-catalog search as a
-  discovery path on top
-- **Decision:**
-- **Owner:**
-
-### 5. Frontend framework
-
-Next.js is permitted but costs real time and needs someone who can move fast in it. What's
-graded is the five stages being visible, not the framework.
-
-- **Options:** Next.js · simpler Python-served UI
-- **Recommend:** decide by who you actually have, not by what sounds better
+- **Would change my mind if:** someone already knows Neo4j well, wants to own it, and it goes
+  in *after* Day 5 as an addition to a working system — never as a dependency the trust layer
+  is built on.
 - **Decision:**
 - **Owner:**
 
@@ -110,6 +162,8 @@ resolve?
 ## Day 3 — data conventions we have to disclose
 
 Not optional details. Each one ends up printed in a column label or defended to a judge.
+These are easier to settle with data in front of you than in the abstract — with one
+exception, #10, which gates ingestion.
 
 ### 9. Deflation convention
 
@@ -120,13 +174,15 @@ fixed and stated.
 - **Decision:**
 - **Owner:**
 
-### 10. Which "housing loan" we mean
+### 10. Which "housing loan" we mean — decide before ingestion
 
 The demo says *kullandırılan* — a flow of new extensions. The series most people grab is the
-stock. Also: deposit banks / all banks / incl. participation; TRY or FX-adjusted;
-seasonally adjusted or not.
+stock. Different numbers, different story, and the demo question is ambiguous between them.
+Also: deposit banks / all banks / incl. participation; TRY or FX-adjusted; seasonally
+adjusted or not.
 
-- **Recommend:** pick explicitly and record it in the catalog. A domain judge will ask.
+- **Recommend:** pull both flow and stock, label each clearly in the catalog, let the agent
+  choose and state which it used.
 - **Decision:**
 - **Owner:**
 
@@ -191,8 +247,3 @@ unreliable, and that's already in PLAN.md.
 
 Where we deploy is partly KKB's answer to give. The part we control is the fallback:
 provision our own VM regardless — an idle VM is cheaper than an undeployed submission.
-
----
-
-**If only three get settled in the next hour:** #1 time budget, #2 data owner, #3 BDDK
-scope. Those determine whether the rest of the plan is real.
