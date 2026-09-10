@@ -1,180 +1,183 @@
-# Teknoloji Yığını
+# Technology Stack
 
-Projede kullanılan tüm teknolojiler. Sürüm alt sınırları için [`pyproject.toml`](pyproject.toml).
+Every technology used in the project. Version floors are in [`pyproject.toml`](pyproject.toml).
 
-Üç kural bu listenin tamamını belirler:
+Three rules determine this entire list:
 
-1. **Arka uç ve agentic katman Python.** Yarışma kuralı gereği, özel bir gereklilik olmadıkça
-   ek bir dilde geliştirme yapılmaz. Arayüz bu kuralın dışındadır.
-2. **Yalnızca açık kaynak kütüphaneler.** Tabloların lisans sütunu bunun içindir.
-3. **Çalışma zamanında yalnızca Kloudeks.** Hiçbir üçüncü parti LLM servisi kullanılmaz.
-
----
-
-## Dil ve çalışma zamanı
-
-| Teknoloji | Kullanım | Lisans |
-|---|---|---|
-| Python 3.11+ | Arka uç, agentic katman, tüm veri işleme | PSF |
-| TypeScript | Yalnızca arayüz | Apache-2.0 |
-| SQL (DuckDB lehçesi) | Lakehouse sorguları | — |
+1. **Python for the backend and agentic layer.** Per the competition rules, no development
+   in an additional language unless there is a specific requirement. The frontend is the
+   stated exception.
+2. **Open-source libraries only.** That is what the licence column is for.
+3. **Kloudeks only at runtime.** No third-party LLM service is used.
 
 ---
 
-## Yapay zekâ ve çıkarım — Kloudeks MIA
+## Language and runtime
 
-Tek çıkarım sağlayıcısıdır. Uç nokta OpenAI uyumludur: `https://mia.csp.kloudeks.com/v1`
-
-| Model | Kullanım | Sınır |
+| Technology | Purpose | Licence |
 |---|---|---|
-| `kkbhackathon2026/Qwen3.8-27B` | Soru anlama, planlama, anlatı üretimi, görsel yorumlama | Prompt başına en fazla 5 görsel |
-| `kkbhackathon2026/Qwen3-Embedding-8B` | Seri metaverisi üzerinde anlamsal arama vektörleri | — |
-| `kkbhackathon2026/Unlimited-OCR` | Belge görselinden metin çıkarma | Prompt başına en fazla 3 görsel |
-
-| Kütüphane | Kullanım | Lisans |
-|---|---|---|
-| `openai` (Python SDK) | MIA istemcisi — uç nokta OpenAI uyumlu olduğu için standart istemci kullanılır | Apache-2.0 |
-
-API anahtarı yalnızca sunucu tarafında, ortam değişkeninde tutulur. Arayüz koduna hiçbir
-koşulda girmez.
+| Python 3.11+ | Backend, agentic layer, all data work | PSF |
+| TypeScript | Frontend only | Apache-2.0 |
+| SQL (DuckDB dialect) | Lakehouse queries | — |
 
 ---
 
-## Veri depolama
+## AI and inference — Kloudeks MIA
 
-| Teknoloji | Kullanım | Lisans |
+The only inference provider. The endpoint is OpenAI-compatible: `https://mia.csp.kloudeks.com/v1`
+
+| Model | Purpose | Limit |
 |---|---|---|
-| **DuckDB** | Analitik veri deposu ve lakehouse sorgu motoru | MIT |
-| **LanceDB** | Seri metaverisi için vektör deposu | Apache-2.0 |
-| Apache Parquet (PyArrow) | Silver ve gold katman dosya formatı | Apache-2.0 |
-| Yerel dosya sistemi | Bronze katman — ham kaynak dosyaların SHA-256 özetiyle arşivi | — |
+| `kkbhackathon2026/Qwen3.8-27B` | Question understanding, planning, narrative generation, vision | Max 5 images per prompt |
+| `kkbhackathon2026/Qwen3-Embedding-8B` | Embedding vectors for semantic search over series metadata | — |
+| `kkbhackathon2026/Unlimited-OCR` | Text extraction from document images | Max 3 images per prompt |
 
-Katman yapısı: `bronze` (ham, dokunulmamış) → `silver` (ayrıştırılmış, kaynak birimlerinde)
-→ `gold` (hizalanmış, kümülatiften arındırılmış, birleştirilebilir).
+| Library | Purpose | Licence |
+|---|---|---|
+| `openai` (Python SDK) | MIA client — the endpoint is OpenAI-compatible, so the standard client is used | Apache-2.0 |
+
+The API key lives in an environment variable, server-side only. It never reaches frontend
+code under any circumstances.
 
 ---
 
-## Veri işleme
+## Storage
 
-| Teknoloji | Kullanım | Lisans |
+| Technology | Purpose | Licence |
 |---|---|---|
-| Pandas | Veri çerçeveleri, zaman serisi hizalama | BSD-3-Clause |
-| NumPy | Sayısal işlemler | BSD-3-Clause |
-| PyArrow | Parquet okuma/yazma, DuckDB birlikte çalışması | Apache-2.0 |
+| **DuckDB** | Analytical store and lakehouse query engine | MIT |
+| **LanceDB** | Vector store for series metadata | Apache-2.0 |
+| Apache Parquet (PyArrow) | File format for the silver and gold layers | Apache-2.0 |
+| Local filesystem | Bronze layer — raw source files archived with their SHA-256 | — |
+
+Layering: `bronze` (raw, untouched) → `silver` (parsed, still in source units) → `gold`
+(harmonised, de-cumulated, joinable).
 
 ---
 
-## Veri temini ve belge ayrıştırma
+## Data processing
 
-| Teknoloji | Kullanım | Lisans |
+| Technology | Purpose | Licence |
 |---|---|---|
-| httpx | HTTP istemcisi — EVDS API, BDDK dosyaları, canlı URL'ler | BSD-3-Clause |
-| openpyxl | `.xlsx` bültenler | MIT |
-| xlrd | Eski `.xls` dosyalar — BDDK bazı dosyaları hâlâ bu formatta yayımlıyor | BSD |
-| BeautifulSoup4 | HTML ayrıştırma, sayfadaki hedef belge bağlantısının bulunması | MIT |
-| lxml | HTML/XML arka ucu | BSD |
-| pypdf | Metin katmanı olan PDF'lerden doğrudan çıkarım | BSD-3-Clause |
-| pypdfium2 | PDF sayfalarının PNG'ye dönüştürülmesi — OCR öncesi adım | Apache-2.0 / BSD-3-Clause |
-| Playwright | JavaScript ile üretilen sayfalar (headless Chromium) | Apache-2.0 |
-
-OCR sırası önemlidir: önce metin çıkarımı denenir, başarısız olursa sayfa görsele
-dönüştürülüp Unlimited-OCR'a gönderilir. OCR varsayılan değil, geri düşüş yoludur.
+| Pandas | Dataframes, time-series alignment | BSD-3-Clause |
+| NumPy | Numerics | BSD-3-Clause |
+| PyArrow | Parquet I/O, DuckDB interop | Apache-2.0 |
 
 ---
 
-## Analiz
+## Acquisition and document parsing
 
-| Teknoloji | Kullanım | Lisans |
+| Technology | Purpose | Licence |
 |---|---|---|
-| statsmodels | ADF ve KPSS durağanlık testleri, eşbütünleşme, Granger / Toda-Yamamoto, STL ayrıştırma | BSD-3-Clause |
-| ruptures | Kırılma noktası tespiti (PELT, ikili bölümleme) | BSD-2-Clause |
-| SciPy | İstatistiksel testler, dayanıklı z-skorları | BSD-3-Clause |
+| httpx | HTTP client — EVDS API, BDDK files, live URLs | BSD-3-Clause |
+| openpyxl | `.xlsx` bulletins | MIT |
+| xlrd | Legacy `.xls` — BDDK still publishes some files in this format | BSD |
+| BeautifulSoup4 | HTML parsing, finding the target document linked from a page | MIT |
+| lxml | HTML/XML backend | BSD |
+| pypdf | Direct extraction from PDFs that have a text layer | BSD-3-Clause |
+| pypdfium2 | Rendering PDF pages to PNG — the step before OCR | Apache-2.0 / BSD-3-Clause |
+| Playwright | JavaScript-rendered pages (headless Chromium) | Apache-2.0 |
+
+Order matters: text extraction is attempted first, and only if that yields nothing is the
+page rendered to an image and sent to Unlimited-OCR. OCR is the fallback path, not the
+default.
 
 ---
 
-## Çıktı ve görselleştirme
+## Analysis
 
-| Teknoloji | Kullanım | Lisans |
+| Technology | Purpose | Licence |
 |---|---|---|
-| Plotly (Python) | Grafik tanımının sunucu tarafında üretilmesi | MIT |
-| plotly.js | Grafiğin tarayıcıda çizilmesi | MIT |
-
-Eksen ataması sütun birimlerinden deterministik olarak türetilir; modelin serbest seçimine
-bırakılmaz.
+| statsmodels | ADF and KPSS stationarity tests, cointegration, Granger / Toda-Yamamoto, STL decomposition | BSD-3-Clause |
+| ruptures | Change-point detection (PELT, binary segmentation) | BSD-2-Clause |
+| SciPy | Statistical tests, robust z-scores | BSD-3-Clause |
 
 ---
 
-## API ve arka uç
+## Output and visualisation
 
-| Teknoloji | Kullanım | Lisans |
+| Technology | Purpose | Licence |
+|---|---|---|
+| Plotly (Python) | Chart specification generated server-side | MIT |
+| plotly.js | Chart rendered in the browser | MIT |
+
+Axis assignment is derived deterministically from column units rather than left to the
+model's discretion.
+
+---
+
+## API and backend
+
+| Technology | Purpose | Licence |
 |---|---|---|
 | FastAPI | HTTP API | MIT |
-| Uvicorn | ASGI sunucusu | BSD-3-Clause |
-| Pydantic | Şema doğrulama — özellikle planlayıcı çıktısının işlem sözlüğüne uygunluğu | MIT |
-| Server-Sent Events | Aşama izinin arayüze akıtılması | — |
-| python-dotenv | Ortam değişkeni yönetimi | BSD-3-Clause |
+| Uvicorn | ASGI server | BSD-3-Clause |
+| Pydantic | Schema validation — in particular, checking planner output against the operation vocabulary | MIT |
+| Server-Sent Events | Streaming the stage trace to the interface | — |
+| python-dotenv | Environment configuration | BSD-3-Clause |
 
 ---
 
-## Arayüz
+## Frontend
 
-| Teknoloji | Kullanım | Lisans |
+| Technology | Purpose | Licence |
 |---|---|---|
-| React 19 | Bileşen katmanı | MIT |
-| Next.js | Uygulama çatısı | MIT |
-| TypeScript | Tip güvenliği | Apache-2.0 |
-| Tailwind CSS | Stil | MIT |
-| react-plotly.js | Grafik bileşeni | MIT |
+| React 19 | Component layer | MIT |
+| Next.js | Application framework | MIT |
+| TypeScript | Type safety | Apache-2.0 |
+| Tailwind CSS | Styling | MIT |
+| react-plotly.js | Chart component | MIT |
 
-Arayüz MIA'ya doğrudan istek atmaz. Zincir her zaman: tarayıcı → FastAPI → MIA.
+The frontend never calls MIA directly. The chain is always: browser → FastAPI → MIA.
 
 ---
 
-## Web araması
+## Web search
 
-| Teknoloji | Kullanım | Lisans |
+| Technology | Purpose | Licence |
 |---|---|---|
-| SearxNG (kendi sunucumuzda) | Web Search aracı | AGPL-3.0 |
+| SearxNG (self-hosted) | Web Search tool | AGPL-3.0 |
 
-Ticari bir arama API'sinin kural kapsamına girip girmediği KKB'ye soruldu. Yanıt gelene kadar
-kendi barındırdığımız çözüm varsayılandır; böylece gelecek yanıt yapılmış işi geçersiz kılamaz.
+Whether a commercial search API falls under the third-party rule has been raised with KKB.
+Until an answer arrives, the self-hosted option is the default — so the eventual answer
+cannot invalidate work already done.
 
 ---
 
-## Geliştirme araçları
+## Development tooling
 
-| Teknoloji | Kullanım | Lisans |
+| Technology | Purpose | Licence |
 |---|---|---|
-| uv | Bağımlılık ve sanal ortam yönetimi | MIT / Apache-2.0 |
-| pytest | Testler ve veri doğrulama kuralları | MIT |
-| ruff | Lint ve biçimlendirme | MIT |
-| Git / GitHub (private) | Sürüm kontrolü | — |
+| uv | Dependency and virtual environment management | MIT / Apache-2.0 |
+| pytest | Tests, including the data invariant suite | MIT |
+| ruff | Linting and formatting | MIT |
+| Git / GitHub (private) | Version control | — |
 
 ---
 
-## Dağıtım
+## Deployment
 
-| Teknoloji | Kullanım | Lisans |
+| Technology | Purpose | Licence |
 |---|---|---|
-| Docker / Docker Compose | Paketleme ve SearxNG'nin çalıştırılması | Apache-2.0 |
-| Barındırma | **Karara bağlanmadı** — Kloudeks üzerinde uygulama barındırma imkânı KKB'ye soruldu. Yanıt gelene kadar kendi sunucumuz varsayılan | — |
+| Docker / Docker Compose | Packaging, and running SearxNG | Apache-2.0 |
+| Hosting | **Undecided** — whether Kloudeks can host the application has been raised with KKB. Our own server is the default until it answers | — |
 
-Veri gölü tamamen yerel dosyalardan oluşur (DuckDB + Parquet). Uygulama nereye taşınırsa
-veri de onunla taşınır; depolama tasarımı barındırma kararına bağlı değildir.
+The data lake is entirely local files (DuckDB + Parquet). It moves wherever the application
+moves, so the storage design does not depend on the hosting decision.
 
 ---
 
-## Değerlendirilip kapsam dışı bırakılanlar
+## Evaluated and left out of scope
 
-| Teknoloji | Gerekçe |
+| Technology | Reasoning |
 |---|---|
-| **Neo4j** | Köken kaydı graf yapısında; ancak analiz nesnesi başına birkaç düzine düğüm söz konusu. DuckDB içinde JSON olarak saklamak yeterli. Ayrı bir servisin kurulması, işletilmesi ve demo günü ayakta tutulması, sağladığı faydadan büyük bir maliyet. Gün 5'ten sonra, çalışan bir sisteme *ek* olarak yeniden değerlendirilebilir — güven katmanının bağımlı olduğu bir bileşen olarak değil. Bkz. [DECISIONS.md](DECISIONS.md) #16 |
-| Ticari arama API'leri | Kural kapsamı netleşene kadar kullanılmıyor |
-| Tesseract OCR | Gerek kalmadı — Unlimited-OCR aynı işi Türkçe desteğiyle ve ek sistem bağımlılığı olmadan yapıyor |
+| **Neo4j** | Lineage is genuinely graph-shaped, but the graph is a few dozen nodes per analysis object. Storing it as JSON inside DuckDB is sufficient. Standing up, operating and keeping a separate service alive on demo day costs more than it returns. Worth revisiting after Day 5 as an *addition* to a working system — never as something the trust layer depends on. See [DECISIONS.md](DECISIONS.md) #16 |
+| Commercial search APIs | Not used until the rule's scope is clarified |
+| Tesseract OCR | Unnecessary — Unlimited-OCR does the same job with Turkish support and no extra system dependency |
 
 ---
 
-## Lisans notu
+## Licence note
 
-Yukarıdaki lisanslar yaygın olarak bilinen değerlerdir; teslim öncesi `uv pip list` çıktısı
-üzerinden doğrulanacaktır. Çalışma zamanında kullanılan tüm kütüphaneler açık kaynaktır.
+The licences above are widely known values and will be verified against `uv pip list` output
+before submission. Every library used at runtime is open source.

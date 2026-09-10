@@ -148,7 +148,7 @@ Yalnızca açık kaynak kütüphaneler kullanılmıştır.
 değil, kendi API'mize istek atar.
 
 Kullanılan tüm teknolojiler, kullanım amaçları ve lisanslarıyla birlikte
-[STACK.md](STACK.md) içinde listelenmiştir.
+[STACK.md](STACK.md) içinde listelenmiştir (İngilizce).
 
 ---
 
