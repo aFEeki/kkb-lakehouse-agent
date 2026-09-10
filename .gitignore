@@ -1,0 +1,44 @@
+# --- Never commit these. See README "Repo rules". ---
+.claude/
+**/.claude/
+CLAUDE.local.md
+.env
+.env.*
+!.env.example
+*.key
+secrets.*
+
+# --- Data lake: too large for git, rebuilt by the ingest scripts ---
+data/bronze/*
+data/silver/*
+data/gold/*
+!data/**/.gitkeep
+*.parquet
+*.duckdb
+*.duckdb.wal
+.lancedb/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+
+# --- Node / frontend ---
+node_modules/
+.next/
+out/
+.vercel/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
