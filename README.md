@@ -1,209 +1,206 @@
 # KKB Lakehouse Agent
 
-Agentic analytics over Turkish banking and macroeconomic data. Ask a question in Turkish;
-the system plans the analysis, selects its own tools, computes the answer, verifies it,
-and shows the provenance of every number it reports.
+Türkiye bankacılık ve makroekonomi verileri üzerinde çalışan agentic analiz sistemi.
+Türkçe sorulan bir soruyu anlar, analizi planlar, uygun araçları kendisi seçer, hesaplamayı
+yürütür, sonucu doğrular ve ürettiği her sayının kaynağını gösterir.
 
 **KKB Hackathon 2026** — Lakehouse Agent Builder & Data Analytics
-**Team:** Fellas in Istanbul
-
-> **Özet.** BDDK ve EVDS verileri üzerinde çalışan uçtan uca agentic analiz sistemi.
-> Türkçe sorulan bir soruyu anlar, analizi planlar, uygun araçları seçer, çok adımlı
-> hesaplamayı yürütür, sonucu doğrular ve karar destek çıktısına dönüştürür. Ürettiği her
-> sayı, kaynak seriye ve uygulanan dönüşüm zincirine kadar izlenebilir.
+**Ekip:** Fellas in Istanbul
 
 ---
 
-## What it does
+## Sistem ne yapıyor?
 
-The system answers analytical questions over a prepared data pool built from BDDK bulletins
-and TCMB EVDS, January 2021 to June 2026, and enriches them with live sources on request.
+BDDK bültenleri ve TCMB EVDS'ten oluşturulan veri havuzu üzerinde analitik soruları
+yanıtlar; kapsam Ocak 2021 – Haziran 2026'dır. Gerektiğinde canlı kaynaklarla zenginleştirir.
 
-A worked example — the same conversation the organizers published, which the system treats
-as its primary acceptance test:
+Aşağıdaki örnek, organizasyonun paylaştığı senaryodur ve sistemin birincil kabul testi
+olarak ele alınmıştır:
 
-| Turn | Question | What the system does |
+| Tur | Soru | Sistemin yaptığı |
 |---|---|---|
-| 1 | Monthly housing loan volume 2021–2025 with interest rates. Did volume rise when rates fell? | Resolves two series, aligns them onto a shared monthly spine, charts them, and answers from computed evidence |
-| 2 | *Without breaking the table*, deflate only the loan amounts for inflation | Brings in a price index, applies it to one column, leaves rows and other columns untouched |
-| 3 | *Without breaking this table at all*, add the house price index. Could prices explain the weak loan growth? | Joins a fourth series onto the same rows, then revises its own earlier conclusion |
+| 1 | 2021–2025 arasında kullandırılan konut kredilerinin aylık dağılımı ve konut kredisi faiz oranları. Faizlerin düştüğü dönemlerde kredi hacmi nasıl değişti? | İki seriyi çözümler, ortak bir aylık omurgaya hizalar, grafikleştirir ve soruyu hesaplanmış kanıta dayanarak yanıtlar |
+| 2 | *Tabloyu bozmadan*, sadece konut kredisi tutarlarını enflasyondan arındırabilir misin? | Bir fiyat endeksi getirir, yalnızca ilgili sütuna uygular; satırlara ve diğer sütunlara dokunmaz |
+| 3 | *Bu tabloyu hiç bozmadan*, konut fiyat endeksini yeni sütun olarak ekle. Kredilerin artmamasının nedeni fiyat artışları olabilir mi? | Dördüncü seriyi aynı satırlara ekler ve önceki turdaki kendi bulgusunu yeniden değerlendirir |
 
-The system carries one live analysis object across a conversation and modifies it in place.
-It does not rebuild the result from scratch on each turn — see [Design decisions](#design-decisions).
+Sistem, bir sohbet boyunca tek bir canlı analiz nesnesi taşır ve onu yerinde değiştirir. Her
+turda sonucu sıfırdan yeniden üretmez — bkz. [Tasarım kararları](#tasarım-kararları).
 
 ---
 
-## Architecture
+## Mimari
 
-Five stages, as specified in the brief, with a trust layer running underneath all of them.
+Şartnamede tanımlanan beş aşama ve hepsinin altında çalışan güven katmanı.
 
-| Stage | Implementation | Module |
+| Aşama | Uygulama | Modül |
 |---|---|---|
-| **1 · Data Discovery & Acquisition** | Crawl and archive BDDK bulletins and EVDS series. Raw bytes preserved with SHA-256 and retrieval timestamp before anything is parsed | `ingest/`, `data/bronze/` |
-| **2 · Data Cleaning & Alignment** | Quality and gap checks, de-cumulation, unit normalisation, frequency harmonisation. Output is one pool where any series joins to any other | `transform/`, `catalog/`, `data/gold/` |
-| **3 · Agentic Analytics Engine** | Turkish question understanding, series resolution over hybrid semantic and lexical retrieval, tool selection, multi-step execution against the analysis object | `agent/`, `tools/lakehouse.py` |
-| **4 · Analysis** | Anomaly detection, change-point detection, and causality testing with break-aware specification | `tools/anomaly.py`, `tools/change_detection.py`, `tools/causality.py` |
-| **5 · Verification & Output** | Corroboration through web search and direct URL reading; output rendered as chart, table or written report | `tools/web_search.py`, `tools/web_url.py`, `api/` |
+| **1 · Veri Keşfi & Temini** | BDDK bültenleri ve EVDS serilerinin taranması ve arşivlenmesi. Ham veri, ayrıştırılmadan önce SHA-256 özeti ve çekim zaman damgasıyla saklanır | `ingest/`, `data/bronze/` |
+| **2 · Veri Temizliği & Hizalama** | Kalite ve eksik veri kontrolleri, kümülatif ayrıştırma, birim normalizasyonu, frekans hizalama. Çıktı, her serinin her seriyle birleştirilebildiği tek bir havuzdur | `transform/`, `catalog/`, `data/gold/` |
+| **3 · Agentic Analytics Motoru** | Türkçe soru anlama, anlamsal ve sözcüksel aramanın birlikte kullanıldığı seri çözümleme, araç seçimi, analiz nesnesi üzerinde çok adımlı yürütme | `agent/`, `tools/lakehouse.py` |
+| **4 · Verinin Analiz Edilmesi** | Anomali tespiti, kırılma noktası tespiti ve kırılmaları dikkate alan nedensellik testleri | `tools/anomaly.py`, `tools/change_detection.py`, `tools/causality.py` |
+| **5 · Doğrulama & Sonuç** | Web araması ve doğrudan URL okuma ile teyit; çıktının grafik, tablo veya rapor olarak sunulması | `tools/web_search.py`, `tools/web_url.py`, `api/` |
 
-### Trust layer
+### Güven Katmanı
 
-Traceability is a property of the data structure, not a footnote appended to the answer.
-Every column in every result carries a `Lineage` record: its source kind, an exact source
-reference (an EVDS series code, or a workbook, sheet and cell range), the retrieval
-timestamp, the SHA-256 of the raw payload it was parsed from, and the ordered chain of
-transformations applied to it. Derived columns carry their parents' lineage recursively.
+İzlenebilirlik, yanıtın sonuna eklenen bir not değil, veri yapısının bir özelliğidir. Her
+sonuçtaki her sütun bir **köken kaydı** taşır: kaynak türü, tam kaynak referansı (EVDS seri
+kodu ya da çalışma kitabı, sayfa ve hücre aralığı), çekim zamanı, ayrıştırıldığı ham verinin
+SHA-256 özeti ve uygulanan dönüşümlerin sıralı zinciri. Türetilmiş sütunlar, kendilerini
+oluşturan sütunların köken kayıtlarını da özyinelemeli olarak taşır.
 
-The interface exposes this per column, so "where does this number come from" is answered by
-clicking it rather than by consulting a list of sources at the bottom of the page.
+Arayüz bu bilgiyi sütun bazında gösterir. "Bu sayı nereden geliyor?" sorusu, sayfanın altındaki
+bir kaynak listesine bakılarak değil, sütuna tıklanarak yanıtlanır.
 
-Accuracy control is enforced by an invariant suite that gates the data build. Failures block
-the build; they are not warnings. The invariants are documented in [`docs/invariants.md`](docs/).
+Doğruluk kontrolü, veri derlemesini kapıda tutan bir **doğrulama kuralları** kümesiyle
+sağlanır. Başarısız bir kural uyarı üretmez, derlemeyi durdurur. Kurallar
+[`docs/invariants.md`](docs/) içinde belgelenmiştir.
 
 ---
 
-## Agent tools
+## Ajan Araçları
 
-| Tool | Capability |
+| Araç | Yetenek |
 |---|---|
-| **Lakehouse** | Natural-language discovery, query and join over the prepared pool |
-| **Web Search** | Research and corroboration against external sources |
-| **Web URL Agent** | Reads an arbitrary URL and extracts meaning — PDF, Excel, image and text, including documents linked from the page rather than at it |
-| **Anomaly** | Unusual movements, outliers and deviations from expected behaviour |
-| **Causality** | Whether an observed relationship is genuinely causal, or only correlated |
-| **Change Detection** | Level, trend and behavioural breaks in a time series |
+| **Lakehouse** | Hazırlanan veri havuzu üzerinde doğal dille keşif, sorgulama ve birleştirme |
+| **Web Search** | Dış kaynaklardan araştırma ve teyit |
+| **Web URL Agent** | Verilen bir URL'yi okuyup anlam çıkarır — PDF, Excel, görsel ve metin; sayfanın kendisinde değil, sayfadan bağlantılanan belgelerde duran veriler dâhil |
+| **Anomaly** | Olağandışı hareketler, aykırı değerler ve beklenen davranıştan sapmalar |
+| **Causality** | Gözlenen ilişkinin gerçekten neden-sonuç mu, yoksa yalnızca korelasyon mu olduğu |
+| **Change Detection** | Zaman serisinde seviye, eğilim ve davranış değişiklikleri |
 
-The planner routes each question to the tools it needs and cites them in the answer. Tool
-selection is visible in the execution trace rather than hidden.
-
----
-
-## Design decisions
-
-Two choices shape everything else, and both are deliberate.
-
-### The analysis object has an immutable spine
-
-The result of a question is a persistent, versioned object — a fixed date spine plus typed
-columns, each with its own lineage, plus findings and a chart specification. The planner
-emits operations against that object from a closed vocabulary; it never regenerates the
-object and never performs arithmetic itself.
-
-Every column-adding operation left-joins onto the existing spine and asserts that row
-cardinality is unchanged. Re-slicing the spine is a separate operation requiring explicit
-user confirmation. This is what makes "without breaking the table" a guarantee the system
-enforces rather than a behaviour it hopes for: a planner that decides to inner-join or
-re-window cannot do so silently.
-
-The same op log gives the system a working undo, so a mis-specified turn can be reverted
-without discarding earlier ones.
-
-### Cumulative data is classified per series, and verified by a person
-
-BDDK publishes some figures as running totals — some resetting each January, others never
-resetting — alongside ordinary period values. The three are visually indistinguishable on a
-chart, and misclassifying one corrupts every period-over-period figure derived from it.
-
-The obvious detector fails here. "Monotonically increasing implies cumulative" is close to
-worthless for Turkish lira series over this period, because nominal values rose in almost
-every month regardless of what they measured. What discriminates is the January
-discontinuity, so classification is built around that test, recorded with its supporting
-evidence in the catalog, and confirmed by a person before the series is eligible for the
-gold layer. A series that cannot be verified is dropped rather than published.
-
-Each series also carries an explicit aggregation rule, because de-cumulation and frequency
-conversion are coupled: a de-cumulated weekly flow sums to a month, while a stock takes the
-end-of-period value.
+Planlayıcı her soruyu ihtiyaç duyduğu araçlara yönlendirir ve yanıtta bu araçlara atıf yapar.
+Araç seçimi gizli değildir; yürütme izinde görünür.
 
 ---
 
-## Data sources
+## Tasarım kararları
 
-| Source | Coverage | Notes |
+Diğer her şeyi belirleyen iki karar var ve ikisi de bilinçli.
+
+### Analiz nesnesinin tarih omurgası değiştirilemez
+
+Bir sorunun sonucu, kalıcı ve sürümlenen bir nesnedir: sabit bir tarih omurgası, her biri
+kendi köken kaydını taşıyan tipli sütunlar, bulgular ve bir grafik tanımı. Planlayıcı bu nesne
+üzerinde kapalı bir işlem sözlüğünden operasyonlar üretir; nesneyi baştan oluşturmaz ve
+aritmetik yapmaz.
+
+Sütun ekleyen her işlem mevcut omurga üzerine sol birleştirme (left join) yapar ve satır
+sayısının değişmediğini doğrular. Omurganın yeniden dilimlenmesi, kullanıcının açık onayını
+gerektiren ayrı bir işlemdir. "Tabloyu bozmadan" ifadesi böylece sistemin ummakla yetindiği
+bir davranış değil, güvence altına aldığı bir kural hâline gelir: iç birleştirmeye ya da
+tarih aralığını değiştirmeye karar veren bir planlayıcı bunu sessizce yapamaz.
+
+Aynı işlem günlüğü sisteme çalışan bir geri alma yeteneği kazandırır; hatalı bir adım, önceki
+turlar kaybedilmeden geri alınabilir.
+
+### Kümülatif veriler seri bazında sınıflandırılır ve bir kişi tarafından doğrulanır
+
+BDDK bazı verileri yıl başından itibaren biriken, bazılarını yayın başlangıcından itibaren
+biriken toplamlar olarak yayımlar; bunların yanında olağan dönem değerleri de yer alır. Üçü
+bir grafikte birbirinden ayırt edilemez ve birinin yanlış sınıflandırılması, o seriden
+türetilen bütün dönemsel değişim hesaplarını bozar.
+
+Akla ilk gelen yöntem burada işe yaramaz. "Sürekli artıyorsa kümülatiftir" varsayımı, bu
+dönemdeki TL serileri için neredeyse hiçbir bilgi taşımaz; enflasyon zirvede %85'e ulaştığı
+için nominal değerler ne ölçerse ölçsün hemen her ay artmıştır. Ayırt edici olan **Ocak
+kırılmasıdır**. Sınıflandırma bu teste dayanır, gerekçesiyle birlikte katalogda kayıt altına
+alınır ve seri gold katmanına geçmeden önce bir kişi tarafından onaylanır. Doğrulanamayan
+seri yayımlanmaz, kapsam dışı bırakılır.
+
+Her seri ayrıca açık bir toplulaştırma kuralı taşır; çünkü kümülatif ayrıştırma ile frekans
+dönüşümü birbirine bağlıdır: ayrıştırılmış haftalık bir akım aya toplanarak, bir stok ise
+dönem sonu değeri alınarak dönüştürülür.
+
+---
+
+## Veri kaynakları
+
+| Kaynak | Kapsam | Not |
 |---|---|---|
-| **BDDK** — Haftalık Bülten, Aylık Bülten, FinTürk | 2021-01 → 2026-06 | Excel bulletins; multi-row headers, mixed units, cumulative and non-cumulative series |
-| **TCMB EVDS** | 2021-01 → 2026-06 | Daily, weekly and monthly series via the documented API |
-| **Live URLs** | On demand | Supplied at query time and read directly |
+| **BDDK** — Haftalık Bülten, Aylık Bülten, FinTürk | 2021-01 → 2026-06 | Excel bültenler; çok satırlı başlıklar, karışık birimler, kümülatif ve kümülatif olmayan seriler |
+| **TCMB EVDS** | 2021-01 → 2026-06 | Günlük, haftalık ve aylık seriler; dokümante API üzerinden |
+| **Canlı URL'ler** | Talep üzerine | Sorgu anında verilir ve doğrudan okunur |
 
-Series are pinned to a dated snapshot so results are reproducible; the snapshot date is
-shown in the interface, since both sources revise history.
+Seriler, sonuçların yeniden üretilebilmesi için tarihli bir anlık görüntüye sabitlenir. Her iki
+kaynak da geçmiş verilerde revizyon yaptığından, anlık görüntü tarihi arayüzde gösterilir.
 
 ---
 
-## Technology
+## Teknoloji
 
-Python throughout the backend and agent layer, per the competition rules. Open-source
-libraries only.
+Arka uç ve agentic katmanın tamamı, yarışma kurallarına uygun olarak Python ile geliştirilmiştir.
+Yalnızca açık kaynak kütüphaneler kullanılmıştır.
 
-| Concern | Choice |
+| Alan | Tercih |
 |---|---|
-| Inference | Kloudeks MIA — `Qwen3.8-27B` (reasoning, vision), `Qwen3-Embedding-8B` (retrieval), `Unlimited-OCR` (documents) |
-| Analytical store | DuckDB |
-| Vector store | LanceDB |
-| Dataframes | Pandas |
-| Documents | pypdf, pypdfium2, openpyxl |
-| Statistics | statsmodels, ruptures, SciPy |
-| Charts | Plotly |
+| Çıkarım | Kloudeks MIA — `Qwen3.8-27B` (akıl yürütme, görsel), `Qwen3-Embedding-8B` (arama), `Unlimited-OCR` (belge) |
+| Analitik veri deposu | DuckDB |
+| Vektör deposu | LanceDB |
+| Veri işleme | Pandas |
+| Belgeler | pypdf, pypdfium2, openpyxl |
+| İstatistik | statsmodels, ruptures, SciPy |
+| Grafik | Plotly |
 | API | FastAPI |
-| Interface | Next.js |
+| Arayüz | Next.js |
 
-No third-party LLM API service is used at runtime. All inference goes through the Kloudeks
-platform, and the credential is held server-side only — the frontend calls our API, never
-the model endpoint.
+Çalışma zamanında hiçbir üçüncü parti LLM servisi kullanılmaz. Tüm çıkarım Kloudeks platformu
+üzerinden yapılır ve API anahtarı yalnızca sunucu tarafında tutulur; arayüz model uç noktasına
+değil, kendi API'mize istek atar.
 
 ---
 
-## Repository layout
+## Depo yapısı
 
 ```
 src/kkb_agent/
-  llm/          Kloudeks MIA client — the only inference provider
-  frame/        The analysis object: spine, columns, lineage, operations
-  ingest/       BDDK and EVDS acquisition into the bronze layer
-  catalog/      Series metadata — units, cumulative mode, aggregation rule, semantics
-  transform/    De-cumulation, unit normalisation, frequency harmonisation
-  tools/        The six agent tools
-  agent/        Planner and execution loop
-  api/          FastAPI backend
+  llm/          Kloudeks MIA istemcisi — tek çıkarım sağlayıcısı
+  frame/        Analiz nesnesi: omurga, sütunlar, köken kaydı, işlemler
+  ingest/       BDDK ve EVDS verilerinin bronze katmana alınması
+  catalog/      Seri metaverisi — birim, kümülatif mod, toplulaştırma kuralı, semantik
+  transform/    Kümülatif ayrıştırma, birim normalizasyonu, frekans hizalama
+  tools/        Altı ajan aracı
+  agent/        Planlayıcı ve yürütme döngüsü
+  api/          FastAPI arka ucu
 
-web/            Next.js interface
-tests/          Invariant suite gating the data build
-scripts/        Ingest jobs and platform capability probes
-eval/           Frozen Turkish question set used for regression
-docs/           Architecture, database definitions, capability sheet
-data/           Local lake (gitignored) — bronze → silver → gold
+web/            Next.js arayüzü
+tests/          Veri derlemesini kapıda tutan doğrulama kuralları
+scripts/        Veri alma işleri ve platform yetenek testleri
+eval/           Regresyon için sabitlenmiş Türkçe soru kümesi
+docs/           Mimari, veritabanı tanımları, model yetenek raporu
+data/           Yerel veri gölü (git dışı) — bronze → silver → gold
 ```
 
 ---
 
-## Running it
+## Çalıştırma
 
 ```bash
 cp .env.example .env          # MIA_API_KEY, EVDS_API_KEY
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 
-python scripts/build_lakehouse.py    # acquire → parse → harmonise → verify
-pytest -m invariant                  # data-correctness gate
+python scripts/build_lakehouse.py    # temin → ayrıştırma → hizalama → doğrulama
+pytest -m invariant                  # veri doğruluğu kapısı
 uvicorn kkb_agent.api.main:app --reload
 ```
 
-A live deployment is available at *(URL to be added)*.
+Canlı ortam: *(adres eklenecek)*
 
 ---
 
-## Status
+## Durum
 
-Under active development for the 20 September submission. See [PLAN.md](PLAN.md) for the
-build sequence. This section is updated as components land.
+20 Eylül teslimine yönelik geliştirme sürüyor. Yol haritası için [PLAN.md](PLAN.md).
+Bu bölüm, bileşenler tamamlandıkça güncellenir.
 
 ---
 
-## Team
+## Ekip
 
-Fellas in Istanbul — *(members to be listed)*
+Fellas in Istanbul — *(üyeler eklenecek)*
 
-## Contributing
+## Depo kuralları
 
-Local settings, secrets and the data lake are gitignored; check `git status` before
-committing. The MIA credential is environment-only and must never appear in frontend code,
-a commit, or a screen capture.
+Yerel ayarlar, gizli anahtarlar ve veri gölü git dışındadır; her commit öncesi `git status`
+kontrol edilmelidir. MIA anahtarı yalnızca ortam değişkeninde tutulur ve hiçbir koşulda
+arayüz koduna, bir commit'e veya ekran görüntüsüne girmemelidir.
