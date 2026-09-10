@@ -207,7 +207,3 @@ Fellas in Istanbul — *(üyeler eklenecek)*
 Yerel ayarlar, gizli anahtarlar ve veri gölü git dışındadır; her commit öncesi `git status`
 kontrol edilmelidir. MIA anahtarı yalnızca ortam değişkeninde tutulur ve hiçbir koşulda
 arayüz koduna, bir commit'e veya ekran görüntüsüne girmemelidir.
-
-Dal adları ve commit mesajları Jira anahtarıyla başlar — `KKB-12-bddk-ayristirici`,
-`KKB-12 Aylık bülten başlık satırı tespiti` — böylece her değişiklik ilgili işe kadar
-izlenebilir.
