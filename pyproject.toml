@@ -21,6 +21,7 @@ dependencies = [
     "pypdf>=4.2",
     "pypdfium2>=4.30",    # PDF -> PNG without a poppler system dep
     "httpx>=0.27",
+    "truststore>=0.9",   # bddk.org.tr chain fails certifi; use the OS trust store
     "beautifulsoup4>=4.12",
     "lxml>=5.2",
 
