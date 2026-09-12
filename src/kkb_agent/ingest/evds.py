@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import httpx
 
 from kkb_agent.config import Settings
 
 DEFAULT_EVDS_BASE_URL = "https://evds3.tcmb.gov.tr/igmevdsms-dis"
+_EVDS_TIMEZONE = ZoneInfo("Europe/Istanbul")
 
 
 class EVDSError(RuntimeError):
@@ -116,12 +118,7 @@ class EVDSClient:
                 raise EVDSResponseError(
                     f"EVDS item {index} is missing the requested series or Tarih field."
                 ) from exc
-            try:
-                period = datetime.strptime(str(raw_period), "%d-%m-%Y").date()
-            except ValueError as exc:
-                raise EVDSResponseError(
-                    f"EVDS item {index} contains an invalid Tarih value."
-                ) from exc
+            period = _parse_period(item, raw_period, index)
 
             if raw_value is None or str(raw_value).strip() in {"", "null"}:
                 value = None
@@ -134,3 +131,20 @@ class EVDSClient:
                     ) from exc
             observations.append(EVDSObservation(period=period, value=value))
         return tuple(observations)
+
+
+def _parse_period(item: dict, raw_period: object, index: int) -> date:
+    text = str(raw_period).strip()
+    for pattern in ("%d-%m-%Y", "%Y-%m"):
+        try:
+            return datetime.strptime(text, pattern).date()
+        except ValueError:
+            pass
+
+    raw_unix = item.get("UNIXTIME")
+    if isinstance(raw_unix, dict):
+        raw_unix = raw_unix.get("$numberLong")
+    try:
+        return datetime.fromtimestamp(int(str(raw_unix)), tz=_EVDS_TIMEZONE).date()
+    except (TypeError, ValueError, OSError, OverflowError) as exc:
+        raise EVDSResponseError(f"EVDS item {index} contains an invalid Tarih value.") from exc
