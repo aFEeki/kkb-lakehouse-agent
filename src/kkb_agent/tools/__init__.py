@@ -8,6 +8,14 @@ from kkb_agent.tools.anomaly import (
     AnomalyResult,
     analyze_anomalies,
 )
+from kkb_agent.tools.change_detection import (
+    Breakpoint,
+    ChangeDetectionError,
+    ChangeDetectionParameters,
+    ChangeDetectionResult,
+    ChangeKind,
+    detect_changes,
+)
 
 __all__ = [
     "DEFAULT_SENSITIVITY",
@@ -15,5 +23,11 @@ __all__ = [
     "AnomalyParameters",
     "AnomalyPoint",
     "AnomalyResult",
+    "Breakpoint",
+    "ChangeDetectionError",
+    "ChangeDetectionParameters",
+    "ChangeDetectionResult",
+    "ChangeKind",
     "analyze_anomalies",
+    "detect_changes",
 ]
