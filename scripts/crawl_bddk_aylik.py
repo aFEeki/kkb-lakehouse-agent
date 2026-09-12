@@ -123,11 +123,20 @@ def record(entry: dict) -> None:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--delay", type=float, default=2.0, help="seconds between requests (default 2.0)")
+    p.add_argument(
+        "--delay", type=float, default=2.0, help="seconds between requests (default 2.0)"
+    )
     p.add_argument("--limit", type=int, default=0, help="stop after N fetches (0 = no limit)")
-    p.add_argument("--taraf", type=int, action="append", default=None,
-                   help="taraf code, repeatable (default 10001 Sektör only)")
-    p.add_argument("--tables", type=int, nargs="*", default=None, help="table numbers (default all 17)")
+    p.add_argument(
+        "--taraf",
+        type=int,
+        action="append",
+        default=None,
+        help="taraf code, repeatable (default 10001 Sektör only)",
+    )
+    p.add_argument(
+        "--tables", type=int, nargs="*", default=None, help="table numbers (default all 17)"
+    )
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--max-consecutive-failures", type=int, default=5)
     a = p.parse_args()
@@ -139,7 +148,10 @@ def main() -> int:
     jobs = [(y, m, t, tf) for (y, m) in months for t in tables for tf in tarafs]
     todo = [j for j in jobs if not target(*j).exists()]
 
-    print(f"tables      : {len(tables)}  {[TABLES.get(t, t) for t in tables][:4]}{'...' if len(tables) > 4 else ''}")
+    print(
+        f"tables      : {len(tables)}  {[TABLES.get(t, t) for t in tables][:4]}"
+        f"{'...' if len(tables) > 4 else ''}"
+    )
     print(f"taraf       : {[TARAF.get(t, t) for t in tarafs]}")
     print(f"months      : {len(months)}  ({START[0]}-{START[1]:02d} .. {END[0]}-{END[1]:02d})")
     print(f"total jobs  : {len(jobs)}")
@@ -149,7 +161,7 @@ def main() -> int:
         todo = todo[: a.limit]
         print(f"limited to  : {len(todo)}")
     est = len(todo) * (a.delay + 0.4)
-    print(f"est. runtime: {est/60:.1f} min at {a.delay}s delay")
+    print(f"est. runtime: {est / 60:.1f} min at {a.delay}s delay")
     print(f"output      : {OUT.relative_to(ROOT)}")
 
     if a.dry_run:
@@ -157,7 +169,7 @@ def main() -> int:
         for j in todo[:10]:
             print(f"   {j[0]}-{j[1]:02d}  t{j[2]:02d} {TABLES.get(j[2])}  taraf {j[3]}")
         if len(todo) > 10:
-            print(f"   ... and {len(todo)-10} more")
+            print(f"   ... and {len(todo) - 10} more")
         return 0
 
     if not todo:
@@ -192,7 +204,13 @@ def main() -> int:
             try:
                 r = client.post(
                     ENDPOINT,
-                    data={"tabloNo": tablo, "yil": yil, "ay": ay, "paraBirimi": "TL", "taraf": taraf},
+                    data={
+                        "tabloNo": tablo,
+                        "yil": yil,
+                        "ay": ay,
+                        "paraBirimi": "TL",
+                        "taraf": taraf,
+                    },
                 )
                 if r.status_code != 200:
                     raise RuntimeError(f"HTTP {r.status_code}")
@@ -200,11 +218,17 @@ def main() -> int:
                 if not payload.get("success"):
                     # A real "no data for this period" answer, not a transport failure.
                     print(f"  [{i}/{len(todo)}] {label}  no data: {str(payload.get('error'))[:60]}")
-                    record({
-                        "fetched_at": datetime.now(UTC).isoformat(), "yil": yil, "ay": ay,
-                        "tabloNo": tablo, "taraf": taraf, "status": "no_data",
-                        "error": str(payload.get("error"))[:200],
-                    })
+                    record(
+                        {
+                            "fetched_at": datetime.now(UTC).isoformat(),
+                            "yil": yil,
+                            "ay": ay,
+                            "tabloNo": tablo,
+                            "taraf": taraf,
+                            "status": "no_data",
+                            "error": str(payload.get("error"))[:200],
+                        }
+                    )
                     skipped += 1
                     consecutive = 0
                     time.sleep(a.delay)
@@ -216,40 +240,59 @@ def main() -> int:
 
                 j = payload["Json"]
                 rows = j["data"]["rows"] if isinstance(j.get("data"), dict) else j.get("data") or []
-                record({
-                    "fetched_at": datetime.now(UTC).isoformat(),
-                    "url": ENDPOINT,
-                    "params": {"tabloNo": tablo, "yil": yil, "ay": ay, "paraBirimi": "TL", "taraf": taraf},
-                    "path": str(dest.relative_to(ROOT)),
-                    "sha256": hashlib.sha256(raw).hexdigest(),
-                    "bytes": len(raw),
-                    "http_status": r.status_code,
-                    "caption": j.get("caption"),
-                    "col_names": j.get("colNames"),
-                    "row_count": len(rows),
-                    "status": "ok",
-                })
+                record(
+                    {
+                        "fetched_at": datetime.now(UTC).isoformat(),
+                        "url": ENDPOINT,
+                        "params": {
+                            "tabloNo": tablo,
+                            "yil": yil,
+                            "ay": ay,
+                            "paraBirimi": "TL",
+                            "taraf": taraf,
+                        },
+                        "path": str(dest.relative_to(ROOT)),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "bytes": len(raw),
+                        "http_status": r.status_code,
+                        "caption": j.get("caption"),
+                        "col_names": j.get("colNames"),
+                        "row_count": len(rows),
+                        "status": "ok",
+                    }
+                )
                 ok += 1
                 consecutive = 0
                 if i % 25 == 0 or i <= 3:
                     rate = i / max(time.time() - t_start, 1e-6)
-                    print(f"  [{i}/{len(todo)}] {label}  {len(rows):>3} rows  "
-                          f"({rate*60:.0f}/min, {(len(todo)-i)/max(rate,1e-6)/60:.0f} min left)")
+                    print(
+                        f"  [{i}/{len(todo)}] {label}  {len(rows):>3} rows  "
+                        f"({rate * 60:.0f}/min, "
+                        f"{(len(todo) - i) / max(rate, 1e-6) / 60:.0f} min left)"
+                    )
 
             except Exception as e:
                 failed += 1
                 consecutive += 1
                 print(f"  [{i}/{len(todo)}] {label}  FAILED {type(e).__name__}: {str(e)[:80]}")
-                record({
-                    "fetched_at": datetime.now(UTC).isoformat(), "yil": yil, "ay": ay,
-                    "tabloNo": tablo, "taraf": taraf, "status": "error",
-                    "error": f"{type(e).__name__}: {e}"[:300],
-                })
+                record(
+                    {
+                        "fetched_at": datetime.now(UTC).isoformat(),
+                        "yil": yil,
+                        "ay": ay,
+                        "tabloNo": tablo,
+                        "taraf": taraf,
+                        "status": "error",
+                        "error": f"{type(e).__name__}: {e}"[:300],
+                    }
+                )
                 if consecutive >= a.max_consecutive_failures:
-                    print(f"\nABORTING: {consecutive} consecutive failures. "
-                          "Not hammering a source we depend on. Re-run to resume.")
+                    print(
+                        f"\nABORTING: {consecutive} consecutive failures. "
+                        "Not hammering a source we depend on. Re-run to resume."
+                    )
                     break
-                time.sleep(a.delay * (2 ** consecutive))  # back off
+                time.sleep(a.delay * (2**consecutive))  # back off
                 continue
 
             time.sleep(a.delay)

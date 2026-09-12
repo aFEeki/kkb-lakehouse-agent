@@ -68,33 +68,39 @@ OP_SCHEMA = {
     "required": ["operation", "reasoning_tr"],
 }
 
-TOOLS = [{
-    "type": "function",
-    "function": {
-        "name": "add_series_column",
-        "description": "Bir seriyi mevcut analiz tablosuna yeni sutun olarak ekler.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "series_id": {"type": "string", "description": "Katalogdaki seri kimligi"},
-                "label_tr": {"type": "string"},
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "add_series_column",
+            "description": "Bir seriyi mevcut analiz tablosuna yeni sutun olarak ekler.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "series_id": {"type": "string", "description": "Katalogdaki seri kimligi"},
+                    "label_tr": {"type": "string"},
+                },
+                "required": ["series_id"],
             },
-            "required": ["series_id"],
         },
-    },
-}]
+    }
+]
 
 # Every required parameter present. See docstring note 2.
-Q_COMPLETE = ("Konut kredisi faiz orani serisini tabloya yeni sutun olarak ekle. "
-              "series_id: TP_KREDI_FAIZ_KONUT")
+Q_COMPLETE = (
+    "Konut kredisi faiz orani serisini tabloya yeni sutun olarak ekle. "
+    "series_id: TP_KREDI_FAIZ_KONUT"
+)
 
 
 def probe_connectivity(c: OpenAI) -> bool:
     print("\n[0] Connectivity")
     try:
         r = c.chat.completions.create(
-            model=CHAT, messages=[{"role": "user", "content": "Merhaba"}],
-            max_tokens=64, extra_body=NO_THINK,
+            model=CHAT,
+            messages=[{"role": "user", "content": "Merhaba"}],
+            max_tokens=64,
+            extra_body=NO_THINK,
         )
         log("connectivity", "OK", (r.choices[0].message.content or "")[:80])
         return True
@@ -113,20 +119,27 @@ def probe_reasoning(c: OpenAI) -> None:
         reasoning = getattr(m, "reasoning_content", None) or getattr(m, "reasoning", None)
         content = m.content or ""
         if reasoning and not content:
-            log("reasoning", "THINKING MODEL - budget consumed by reasoning",
-                f"{len(reasoning)} reasoning chars, 0 content chars at max_tokens=64")
+            log(
+                "reasoning",
+                "THINKING MODEL - budget consumed by reasoning",
+                f"{len(reasoning)} reasoning chars, 0 content chars at max_tokens=64",
+            )
             notes.append(
                 "Reasoning tokens count against max_tokens. Any call needing visible output "
                 "must either disable thinking or budget generously (1024+)."
             )
         elif reasoning:
-            log("reasoning", "THINKING MODEL", f"{len(reasoning)} reasoning chars alongside content")
+            log(
+                "reasoning", "THINKING MODEL", f"{len(reasoning)} reasoning chars alongside content"
+            )
         else:
             log("reasoning", "no separate reasoning channel")
 
         off = c.chat.completions.create(
-            model=CHAT, messages=[{"role": "user", "content": "Merhaba, nasilsin?"}],
-            max_tokens=64, extra_body=NO_THINK,
+            model=CHAT,
+            messages=[{"role": "user", "content": "Merhaba, nasilsin?"}],
+            max_tokens=64,
+            extra_body=NO_THINK,
         )
         om = off.choices[0].message
         if (om.content or "") and not (getattr(om, "reasoning_content", None)):
@@ -142,18 +155,28 @@ def probe_tool_calling(c: OpenAI) -> None:
         try:
             kw = {"extra_body": extra} if extra else {}
             r = c.chat.completions.create(
-                model=CHAT, messages=[{"role": "user", "content": Q_COMPLETE}],
-                tools=TOOLS, tool_choice="auto", max_tokens=1024, **kw,
+                model=CHAT,
+                messages=[{"role": "user", "content": Q_COMPLETE}],
+                tools=TOOLS,
+                tool_choice="auto",
+                max_tokens=1024,
+                **kw,
             )
             calls = r.choices[0].message.tool_calls
             if calls:
                 args = calls[0].function.arguments
                 ok = "series_id" in json.loads(args)
-                log(f"tool_calling ({label})", "SUPPORTED" if ok else "CALLED, ARGS INCOMPLETE",
-                    f"{calls[0].function.name}({args})")
+                log(
+                    f"tool_calling ({label})",
+                    "SUPPORTED" if ok else "CALLED, ARGS INCOMPLETE",
+                    f"{calls[0].function.name}({args})",
+                )
             else:
-                log(f"tool_calling ({label})", "NO TOOL CALL",
-                    (r.choices[0].message.content or "")[:200])
+                log(
+                    f"tool_calling ({label})",
+                    "NO TOOL CALL",
+                    (r.choices[0].message.content or "")[:200],
+                )
         except Exception as e:
             log(f"tool_calling ({label})", "REJECTED", err(e))
 
@@ -161,9 +184,14 @@ def probe_tool_calling(c: OpenAI) -> None:
 def probe_structured(c: OpenAI) -> None:
     print("\n[3] Structured output paths")
     attempts = [
-        ("json_schema (strict)", NO_THINK,
-         {"type": "json_schema",
-          "json_schema": {"name": "planner_op", "schema": OP_SCHEMA, "strict": True}}),
+        (
+            "json_schema (strict)",
+            NO_THINK,
+            {
+                "type": "json_schema",
+                "json_schema": {"name": "planner_op", "schema": OP_SCHEMA, "strict": True},
+            },
+        ),
         ("guided_json (legacy vLLM)", {**NO_THINK, "guided_json": OP_SCHEMA}, None),
         ("json_object", NO_THINK, {"type": "json_object"}),
     ]
@@ -174,16 +202,22 @@ def probe_structured(c: OpenAI) -> None:
                 kw["response_format"] = rf
             r = c.chat.completions.create(
                 model=CHAT,
-                messages=[{"role": "system", "content": "Yalnizca gecerli JSON dondur."},
-                          {"role": "user", "content": Q_COMPLETE}],
-                max_tokens=1024, **kw,
+                messages=[
+                    {"role": "system", "content": "Yalnizca gecerli JSON dondur."},
+                    {"role": "user", "content": Q_COMPLETE},
+                ],
+                max_tokens=1024,
+                **kw,
             )
             out = r.choices[0].message.content or ""
             try:
                 parsed = json.loads(out)
                 ok = set(OP_SCHEMA["required"]).issubset(parsed)
-                log(f"structured: {label}",
-                    "ENFORCED" if ok else "VALID JSON, SCHEMA NOT ENFORCED", str(parsed)[:220])
+                log(
+                    f"structured: {label}",
+                    "ENFORCED" if ok else "VALID JSON, SCHEMA NOT ENFORCED",
+                    str(parsed)[:220],
+                )
             except json.JSONDecodeError:
                 log(f"structured: {label}", "NOT JSON", out[:200])
         except Exception as e:
@@ -198,7 +232,8 @@ def probe_context(c: OpenAI) -> None:
             c.chat.completions.create(
                 model=CHAT,
                 messages=[{"role": "user", "content": "veri " * n + "\nKisaca yanitla."}],
-                max_tokens=32, extra_body=NO_THINK,
+                max_tokens=32,
+                extra_body=NO_THINK,
             )
             found = n
             print(f"       ~{n:,} tokens: OK")
@@ -218,13 +253,18 @@ def probe_latency(c: OpenAI) -> None:
                 kw = {"extra_body": extra} if extra else {}
                 t0 = time.perf_counter()
                 r = c.chat.completions.create(
-                    model=CHAT, messages=[{"role": "user", "content": prompt}],
-                    max_tokens=1024, **kw,
+                    model=CHAT,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=1024,
+                    **kw,
                 )
                 times.append(time.perf_counter() - t0)
                 toks.append(r.usage.completion_tokens if r.usage else 0)
-            log(f"latency ({label})", f"mean {sum(times)/len(times):.1f}s",
-                f"runs {[f'{t:.1f}s' for t in times]}, completion tokens {toks}")
+            log(
+                f"latency ({label})",
+                f"mean {sum(times) / len(times):.1f}s",
+                f"runs {[f'{t:.1f}s' for t in times]}, completion tokens {toks}",
+            )
         except Exception as e:
             log(f"latency ({label})", "FAILED", err(e))
 
@@ -234,8 +274,11 @@ def probe_streaming(c: OpenAI) -> None:
     try:
         t0 = time.perf_counter()
         stream = c.chat.completions.create(
-            model=CHAT, messages=[{"role": "user", "content": "Enflasyonu uc cumleyle anlat."}],
-            max_tokens=512, stream=True, extra_body=NO_THINK,
+            model=CHAT,
+            messages=[{"role": "user", "content": "Enflasyonu uc cumleyle anlat."}],
+            max_tokens=512,
+            stream=True,
+            extra_body=NO_THINK,
         )
         ttft, chunks = None, 0
         for ch in stream:
@@ -247,8 +290,11 @@ def probe_streaming(c: OpenAI) -> None:
                 chunks += 1
                 if ttft is None:
                     ttft = time.perf_counter() - t0
-        log("streaming", f"SUPPORTED, first token {ttft:.2f}s" if ttft else "no content chunks",
-            f"{chunks} chunks")
+        log(
+            "streaming",
+            f"SUPPORTED, first token {ttft:.2f}s" if ttft else "no content chunks",
+            f"{chunks} chunks",
+        )
     except Exception as e:
         log("streaming", "NOT SUPPORTED", err(e))
 
@@ -270,10 +316,17 @@ def probe_turkish(c: OpenAI) -> None:
     print("\n[8] Turkish quality - a native speaker judges this")
     try:
         r = c.chat.completions.create(
-            model=CHAT, max_tokens=600, extra_body=NO_THINK,
-            messages=[{"role": "user", "content":
-                "Konut kredisi faizleri 2024'te %2.5'ten %4.1'e yukselirken kredi hacmi reel "
-                "olarak %18 daraldi. Bu iliskiyi bir bankaciya iki cumleyle acikla."}],
+            model=CHAT,
+            max_tokens=600,
+            extra_body=NO_THINK,
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Konut kredisi faizleri 2024'te %2.5'ten %4.1'e "
+                    "yukselirken kredi hacmi reel "
+                    "olarak %18 daraldi. Bu iliskiyi bir bankaciya iki cumleyle acikla.",
+                }
+            ],
         )
         out = (r.choices[0].message.content or "").strip()
         print(f"\n{out}\n")
@@ -286,15 +339,19 @@ def verdict() -> str:
     tool_ok = any(v == "SUPPORTED" for k, v in results.items() if k.startswith("tool_calling"))
     schema_ok = results.get("structured: json_schema (strict)") == "ENFORCED"
     if tool_ok and schema_ok:
-        return ("Both native tool calling and strict json_schema work. The planner can emit "
-                "tool calls or schema-constrained JSON, whichever suits. No fallback router "
-                "needed, and no extra half-day for Track B.")
+        return (
+            "Both native tool calling and strict json_schema work. The planner can emit "
+            "tool calls or schema-constrained JSON, whichever suits. No fallback router "
+            "needed, and no extra half-day for Track B."
+        )
     if schema_ok:
         return "Strict json_schema enforces the operation schema. Planner emits constrained JSON."
     if tool_ok:
         return "Native tool calling works. Planner emits tool calls; validate args with Pydantic."
-    return ("No reliable structured output. Closed-enum prompting, strict parsing, one bounded "
-            "retry, deterministic keyword router as fallback.")
+    return (
+        "No reliable structured output. Closed-enum prompting, strict parsing, one bounded "
+        "retry, deterministic keyword router as fallback."
+    )
 
 
 def write_report() -> Path:
@@ -306,7 +363,8 @@ def write_report() -> Path:
         f"Measured {time.strftime('%Y-%m-%d %H:%M %Z')} against `{BASE_URL}`",
         f"Chat: `{CHAT}` · Embeddings: `{EMBED}`",
         "",
-        "| Capability | Result |", "|---|---|",
+        "| Capability | Result |",
+        "|---|---|",
     ]
     lines += [f"| {k} | {v} |" for k, v in results.items()]
     lines += ["", "## Verdict", "", verdict(), ""]
