@@ -89,21 +89,30 @@ def main() -> int:
     # ---- coverage -------------------------------------------------------
     missing = [p for p in expected if p not in found]
     extra = [p for p in found if p not in expected]
-    tables_per_period = {p: sorted(int(f.stem[1:3]) for f in (BRONZE / p).glob("t*.json"))
-                         for p in found}
+    tables_per_period = {
+        p: sorted(int(f.stem[1:3]) for f in (BRONZE / p).glob("t*.json")) for p in found
+    }
     all_tables = sorted({t for ts in tables_per_period.values() for t in ts})
-    incomplete = {p: sorted(set(all_tables) - set(ts))
-                  for p, ts in tables_per_period.items() if set(ts) != set(all_tables)}
+    incomplete = {
+        p: sorted(set(all_tables) - set(ts))
+        for p, ts in tables_per_period.items()
+        if set(ts) != set(all_tables)
+    }
 
     report["coverage"] = {
-        "expected_periods": len(expected), "found_periods": len(found),
-        "missing_periods": missing, "unexpected_periods": extra,
-        "tables": all_tables, "incomplete_periods": incomplete,
+        "expected_periods": len(expected),
+        "found_periods": len(found),
+        "missing_periods": missing,
+        "unexpected_periods": extra,
+        "tables": all_tables,
+        "incomplete_periods": incomplete,
     }
     if missing:
         problems.append(f"{len(missing)} period(s) missing: {missing[:6]}")
     if incomplete:
-        problems.append(f"{len(incomplete)} period(s) missing tables: {dict(list(incomplete.items())[:3])}")
+        problems.append(
+            f"{len(incomplete)} period(s) missing tables: {dict(list(incomplete.items())[:3])}"
+        )
 
     # ---- manifest integrity --------------------------------------------
     mismatches, mf_errors = [], 0
@@ -155,7 +164,9 @@ def main() -> int:
         "tables_without_period_in_caption": sorted(no_period_in_caption),
     }
     if caption_mismatch:
-        problems.append(f"{len(caption_mismatch)} file(s) returned a different period than requested")
+        problems.append(
+            f"{len(caption_mismatch)} file(s) returned a different period than requested"
+        )
 
     report["units"] = {f"t{t:02d}": dict(c) for t, c in sorted(units.items())}
     mixed = [t for t, c in units.items() if len(c) > 1]
@@ -165,14 +176,16 @@ def main() -> int:
     drift_known, drift_new = [], []
     for t in sorted(rowcounts):
         seq = sorted(rowcounts[t])
-        for prev, cur in zip(seq, seq[1:]):
+        for prev, cur in zip(seq, seq[1:], strict=False):
             if rowcounts[t][cur] == rowcounts[t][prev]:
                 continue
             before, after = set(labels[t][prev]), set(labels[t][cur])
             item = {
-                "table": t, "period": cur,
+                "table": t,
+                "period": cur,
                 "rows": f"{rowcounts[t][prev]} -> {rowcounts[t][cur]}",
-                "added": sorted(after - before), "removed": sorted(before - after),
+                "added": sorted(after - before),
+                "removed": sorted(before - after),
             }
             if (t, cur) in KNOWN_SCHEMA_CHANGES:
                 item["acknowledged"] = KNOWN_SCHEMA_CHANGES[(t, cur)]
@@ -181,7 +194,10 @@ def main() -> int:
                 drift_new.append(item)
     report["drift"] = {"acknowledged": drift_known, "needs_review": drift_new}
     if drift_new:
-        problems.append(f"{len(drift_new)} unacknowledged schema change(s) — review and add to KNOWN_SCHEMA_CHANGES")
+        problems.append(
+            f"{len(drift_new)} unacknowledged schema change(s) — "
+            "review and add to KNOWN_SCHEMA_CHANGES"
+        )
 
     renamed = []
     for t in sorted(labels):
@@ -203,19 +219,22 @@ def main() -> int:
     print("=" * 70)
     print(f"BDDK bronze health check   {BRONZE.relative_to(ROOT)}")
     print("=" * 70)
-    print(f"\nCOVERAGE   {c['found_periods']}/{c['expected_periods']} periods, "
-          f"{len(c['tables'])} tables  ({found[0]} .. {found[-1]})")
+    print(
+        f"\nCOVERAGE   {c['found_periods']}/{c['expected_periods']} periods, "
+        f"{len(c['tables'])} tables  ({found[0]} .. {found[-1]})"
+    )
     print(f"           missing: {missing or 'none'}")
     if incomplete:
         for p, ts in list(incomplete.items())[:5]:
             print(f"           {p} missing tables {ts}")
 
-    print(f"\nINTEGRITY  hash mismatches: {len(mismatches)}   "
-          f"non-ok manifest entries: {mf_errors}")
+    print(f"\nINTEGRITY  hash mismatches: {len(mismatches)}   non-ok manifest entries: {mf_errors}")
     for m in mismatches[:5]:
         print(f"           ! {m}")
-    print(f"           captions matching requested period: "
-          f"{'all' if not caption_mismatch else f'{len(caption_mismatch)} MISMATCH'}")
+    print(
+        f"           captions matching requested period: "
+        f"{'all' if not caption_mismatch else f'{len(caption_mismatch)} MISMATCH'}"
+    )
     if no_period_in_caption:
         print(f"           tables {sorted(no_period_in_caption)} state no period in the caption —")
         print("           for these the only evidence of the period is our own request,")
