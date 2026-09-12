@@ -226,7 +226,9 @@ def test_end_to_end_through_production_executor():
     frame = frame_with()
     requested = operation()
     executor = create_operation_executor()
-    assert executor.supported_operations == frozenset({OperationType.INDEX_COLUMN})
+    assert executor.supported_operations == frozenset(
+        {OperationType.DEFLATE_COLUMN, OperationType.INDEX_COLUMN}
+    )
 
     result = executor.execute(frame, requested)
 
@@ -249,7 +251,9 @@ def test_failed_execution_is_atomic():
     assert len(frame.columns) == 1
 
 
-def test_only_index_handler_is_registered_in_production_composition():
+def test_completed_handlers_are_registered_in_production_composition():
     executor = create_operation_executor()
     assert isinstance(executor, OperationExecutor)
-    assert executor.supported_operations == frozenset({OperationType.INDEX_COLUMN})
+    assert executor.supported_operations == frozenset(
+        {OperationType.DEFLATE_COLUMN, OperationType.INDEX_COLUMN}
+    )
