@@ -227,7 +227,11 @@ def test_end_to_end_through_production_executor():
     requested = operation()
     executor = create_operation_executor()
     assert executor.supported_operations == frozenset(
-        {OperationType.DEFLATE_COLUMN, OperationType.INDEX_COLUMN}
+        {
+            OperationType.DEFLATE_COLUMN,
+            OperationType.INDEX_COLUMN,
+            OperationType.REVERT_TO,
+        }
     )
 
     result = executor.execute(frame, requested)
@@ -255,5 +259,9 @@ def test_completed_handlers_are_registered_in_production_composition():
     executor = create_operation_executor()
     assert isinstance(executor, OperationExecutor)
     assert executor.supported_operations == frozenset(
-        {OperationType.DEFLATE_COLUMN, OperationType.INDEX_COLUMN}
+        {
+            OperationType.DEFLATE_COLUMN,
+            OperationType.INDEX_COLUMN,
+            OperationType.REVERT_TO,
+        }
     )

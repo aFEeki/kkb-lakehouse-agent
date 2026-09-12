@@ -253,7 +253,11 @@ def test_successful_executor_execution_commits_exactly_once():
     requested = operation()
     executor = create_operation_executor()
     assert executor.supported_operations == frozenset(
-        {OperationType.DEFLATE_COLUMN, OperationType.INDEX_COLUMN}
+        {
+            OperationType.DEFLATE_COLUMN,
+            OperationType.INDEX_COLUMN,
+            OperationType.REVERT_TO,
+        }
     )
 
     result = executor.execute(frame, requested)

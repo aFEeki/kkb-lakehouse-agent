@@ -20,6 +20,14 @@ from kkb_agent.agent.findings import (
     create_finding,
     revise_finding,
 )
+from kkb_agent.agent.history import (
+    FrameSnapshot,
+    FrameSnapshotHistory,
+    SnapshotConflictError,
+    SnapshotHistoryError,
+    SnapshotLineageError,
+    SnapshotNotFoundError,
+)
 
 __all__ = [
     "DuplicateFindingError",
@@ -27,12 +35,18 @@ __all__ = [
     "FindingEvidenceError",
     "FindingNotFoundError",
     "FindingServiceError",
+    "FrameSnapshot",
+    "FrameSnapshotHistory",
     "OperationExecutionError",
     "OperationExecutor",
     "OperationHandler",
     "OperationHandlerError",
     "OperationPostconditionError",
     "OperationVersionError",
+    "SnapshotConflictError",
+    "SnapshotHistoryError",
+    "SnapshotLineageError",
+    "SnapshotNotFoundError",
     "UnimplementedOperationError",
     "UnsupportedOperationError",
     "create_finding",

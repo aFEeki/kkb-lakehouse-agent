@@ -5,6 +5,7 @@ from types import MappingProxyType
 
 from pydantic import ValidationError
 
+from kkb_agent.agent.history import FrameSnapshotHistory
 from kkb_agent.frame import AnalysisFrame, Operation, OperationType, assert_spine_intact
 
 OperationHandler = Callable[[AnalysisFrame, Operation], AnalysisFrame]
@@ -37,7 +38,12 @@ class OperationPostconditionError(OperationExecutionError):
 class OperationExecutor:
     """Dispatch validated operations through an explicit, immutable registry."""
 
-    def __init__(self, handlers: Mapping[OperationType, OperationHandler] | None = None):
+    def __init__(
+        self,
+        handlers: Mapping[OperationType, OperationHandler] | None = None,
+        *,
+        snapshot_history: FrameSnapshotHistory | None = None,
+    ):
         checked: dict[OperationType, OperationHandler] = {}
         for kind, handler in (handlers or {}).items():
             if type(kind) is not OperationType:
@@ -48,10 +54,18 @@ class OperationExecutor:
                 raise TypeError(f"Handler for {kind.value!r} must be callable")
             checked[kind] = handler
         self._handlers = MappingProxyType(checked)
+        self._snapshot_history = snapshot_history
 
     @property
     def supported_operations(self) -> frozenset[OperationType]:
-        return frozenset(self._handlers)
+        supported = set(self._handlers)
+        if self._snapshot_history is not None:
+            supported.add(OperationType.REVERT_TO)
+        return frozenset(supported)
+
+    @property
+    def snapshot_history(self) -> FrameSnapshotHistory | None:
+        return self._snapshot_history
 
     def execute(self, frame: AnalysisFrame, operation: Operation) -> AnalysisFrame:
         if not isinstance(frame, AnalysisFrame):
@@ -72,6 +86,9 @@ class OperationExecutor:
                 f"Operation {kind.value!r} results in version {operation.resulting_version}; "
                 f"expected {frame.version + 1}"
             )
+
+        if kind is OperationType.REVERT_TO and self._snapshot_history is not None:
+            return self._execute_revert(frame, operation)
 
         handler = self._handlers.get(kind)
         if handler is None:
@@ -110,6 +127,40 @@ class OperationExecutor:
                 f"Operation {kind.value!r} was not appended exactly once at frame version "
                 f"{frame.version}"
             )
+        if self._snapshot_history is not None:
+            self._snapshot_history.retain_transition(frame, successor)
+        return successor
+
+    def _execute_revert(self, frame: AnalysisFrame, operation: Operation) -> AnalysisFrame:
+        history = self._snapshot_history
+        if history is None:  # pragma: no cover - guarded by execute
+            raise UnimplementedOperationError("revert_to requires snapshot history")
+        target = history.resolve(frame, operation.parameters.target_version)
+        try:
+            successor = AnalysisFrame.model_validate(
+                {
+                    **frame.model_dump(),
+                    "version": operation.resulting_version,
+                    "spine": target.spine,
+                    "columns": target.columns,
+                    "charts": target.charts,
+                    "findings": frame.findings,
+                    "operations": (*frame.operations, operation),
+                }
+            )
+            successor.assert_successor_of(frame)
+            assert_spine_intact(frame.spine, successor.spine)
+        except (ValidationError, ValueError) as exc:
+            raise OperationPostconditionError(
+                f"Operation {operation.kind.value!r} produced an invalid restored successor "
+                f"from frame version {frame.version}: {exc}"
+            ) from exc
+        if successor.operations != (*frame.operations, operation):
+            raise OperationPostconditionError(
+                f"Operation {operation.kind.value!r} was not appended exactly once at frame "
+                f"version {frame.version}"
+            )
+        history.retain_transition(frame, successor)
         return successor
 
     @staticmethod
