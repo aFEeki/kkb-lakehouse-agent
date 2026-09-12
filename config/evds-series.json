@@ -1,0 +1,34 @@
+{
+  "start_date": "2021-01-01",
+  "end_date": "2026-06-30",
+  "is_full_evds_catalog": false,
+  "scope_note": "Demo senaryosu ve en yakın bankacılık/makroekonomi soruları için seçilmiş ilk geliştirme alt kümesi; tüm EVDS kataloğunu temsil etmez.",
+  "known_gaps": [
+    "EVDS'nin yaklaşık 250 serilik hedef geliştirme havuzu henüz bu ilk alt kümeye tamamen eklenmedi.",
+    "BDDK haftalık bültenleri ve FinTürk bu EVDS ingestion çalışmasının kapsamında değildir."
+  ],
+  "series": [
+    {"code": "TP.KTF10", "name": "İhtiyaç kredisi faizi (TL, akım)", "frequency": "weekly"},
+    {"code": "TP.KTF101", "name": "İhtiyaç kredisi faizi, KMH dahil (TL, akım)", "frequency": "weekly"},
+    {"code": "TP.KTF11", "name": "Taşıt kredisi faizi (TL, akım)", "frequency": "weekly"},
+    {"code": "TP.KTF12", "name": "Konut kredisi faizi (TL, akım)", "frequency": "weekly"},
+    {"code": "TP.KTF17", "name": "Ticari kredi faizi (TL, akım)", "frequency": "weekly"},
+    {"code": "TP.KTF18", "name": "Ticari kredi faizi, KMH ve kurumsal kartlar hariç (TL, akım)", "frequency": "weekly"},
+    {"code": "TP.KTFTUK", "name": "Tüketici kredisi faizi (TL, akım)", "frequency": "weekly"},
+    {"code": "TP.KFE.TR", "name": "Konut Fiyat Endeksi", "frequency": "monthly"},
+    {"code": "TP.GENENDEKS.T1", "name": "Tüketici Fiyat Endeksi (2003=100)", "frequency": "monthly"},
+    {"code": "TP.DK.USD.S", "name": "ABD doları döviz satış kuru", "frequency": "daily"},
+    {"code": "TP.DK.EUR.S", "name": "Euro döviz satış kuru", "frequency": "daily"},
+    {"code": "TP.AB.B6", "name": "Toplam uluslararası rezervler", "frequency": "monthly"},
+    {"code": "TP.KM.F01", "name": "Tasarruf mevduatı", "frequency": "monthly"},
+    {"code": "TP.KM.F19", "name": "Döviz tevdiat hesapları", "frequency": "monthly"},
+    {"code": "TP.KM.F35", "name": "Toplam mevduat", "frequency": "monthly"},
+    {"code": "TP.KKM.K4", "name": "TL kur korumalı mevduat toplamı", "frequency": "monthly"},
+    {"code": "TP.TOP.T18", "name": "Bankacılık sektörü kredileri", "frequency": "monthly"},
+    {"code": "TP.TOP.T19", "name": "Bankacılık sektörü tasfiye olunacak alacaklar (net)", "frequency": "monthly"},
+    {"code": "TP.TOP.T41", "name": "Bankacılık sektörü toplam varlıkları", "frequency": "monthly"},
+    {"code": "TP.TOP.V01", "name": "Bankacılık sektörü mevduatı", "frequency": "monthly"},
+    {"code": "TP.TOP.V28", "name": "Bankacılık sektörü özkaynakları", "frequency": "monthly"},
+    {"code": "TP.KKO2.IS.TOP", "name": "İmalat sanayi kapasite kullanım oranı", "frequency": "monthly"}
+  ]
+}

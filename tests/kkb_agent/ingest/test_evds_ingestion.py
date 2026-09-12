@@ -1,0 +1,134 @@
+import json
+from datetime import UTC, date, datetime
+from decimal import Decimal
+from pathlib import Path
+
+import pyarrow.parquet as pq
+import pytest
+
+from kkb_agent.ingest.evds import EVDSObservation
+from kkb_agent.ingest.evds_ingestion import CuratedEVDSIngestor, load_curated_config
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+class FakeEVDSClient:
+    def __init__(self, responses):
+        self.responses = responses
+        self.calls = []
+
+    def fetch_series(self, series_code, *, start_date, end_date):
+        self.calls.append((series_code, start_date, end_date))
+        return self.responses.get(series_code, ())
+
+
+def write_config(path, *, series, start="2021-01-01", end="2026-06-30"):
+    path.write_text(
+        json.dumps(
+            {
+                "start_date": start,
+                "end_date": end,
+                "is_full_evds_catalog": False,
+                "scope_note": "Curated development subset",
+                "known_gaps": ["Full EVDS catalog"],
+                "series": series,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_ingests_every_series_and_records_coverage(tmp_path):
+    config_path = tmp_path / "series.json"
+    write_config(
+        config_path,
+        series=[
+            {"code": "TP.TEST.MONTHLY", "name": "Monthly", "frequency": "monthly"},
+            {"code": "TP.TEST.EMPTY", "name": "Empty", "frequency": "monthly"},
+        ],
+    )
+    client = FakeEVDSClient(
+        {
+            "TP.TEST.MONTHLY": (
+                EVDSObservation(date(2021, 1, 1), Decimal("10.25")),
+                EVDSObservation(date(2021, 2, 1), None),
+                EVDSObservation(date(2026, 7, 1), Decimal("99")),
+            )
+        }
+    )
+    now = datetime(2026, 9, 12, 18, 0, tzinfo=UTC)
+
+    report = CuratedEVDSIngestor(client, tmp_path / "silver", clock=lambda: now).ingest(
+        load_curated_config(config_path)
+    )
+
+    assert [call[0] for call in client.calls] == ["TP.TEST.MONTHLY", "TP.TEST.EMPTY"]
+    assert report["series_with_data"] == 1
+    assert report["series_without_data"] == 1
+    assert report["is_full_evds_catalog"] is False
+    assert report["known_gaps"] == ["Full EVDS catalog"]
+    assert report["series"][0]["coverage_start"] == "2021-01-01"
+    assert report["series"][0]["coverage_end"] == "2021-02-01"
+    assert report["series"][0]["observations"] == 2
+    assert report["series"][0]["missing_values"] == 1
+
+    table = pq.read_table(tmp_path / "silver" / "TP.TEST.MONTHLY.parquet")
+    assert table.column("value").to_pylist() == [Decimal("10.2500000000"), None]
+    assert table.column("retrieved_at").to_pylist() == [now, now]
+    assert pq.read_table(tmp_path / "silver" / "TP.TEST.EMPTY.parquet").num_rows == 0
+    assert (
+        json.loads((tmp_path / "silver" / "coverage.json").read_text())["series"][1]["status"]
+        == "no_data"
+    )
+
+
+def test_daily_series_is_split_below_documented_observation_limit(tmp_path):
+    config_path = tmp_path / "series.json"
+    write_config(
+        config_path,
+        start="2021-01-01",
+        end="2026-06-30",
+        series=[{"code": "TP.TEST.DAILY", "name": "Daily", "frequency": "daily"}],
+    )
+    client = FakeEVDSClient({})
+
+    CuratedEVDSIngestor(client, tmp_path / "silver").ingest(load_curated_config(config_path))
+
+    assert client.calls == [
+        ("TP.TEST.DAILY", date(2021, 1, 1), date(2023, 9, 26)),
+        ("TP.TEST.DAILY", date(2023, 9, 27), date(2026, 6, 21)),
+        ("TP.TEST.DAILY", date(2026, 6, 22), date(2026, 6, 30)),
+    ]
+
+
+def test_committed_scope_contains_the_demo_supporting_series():
+    config = load_curated_config(ROOT / "config" / "evds-series.json")
+    codes = {entry.code for entry in config.series}
+
+    assert len(codes) == 22
+    assert {"TP.KTF12", "TP.KFE.TR", "TP.GENENDEKS.T1"} <= codes
+    assert config.is_full_evds_catalog is False
+    assert config.known_gaps
+
+
+@pytest.mark.parametrize(
+    ("series", "message"),
+    [
+        ([], "at least one"),
+        (
+            [
+                {"code": "TP.SAME", "name": "One", "frequency": "monthly"},
+                {"code": "TP.SAME", "name": "Two", "frequency": "monthly"},
+            ],
+            "Duplicate",
+        ),
+        ([{"code": "../unsafe", "name": "Unsafe", "frequency": "monthly"}], "Invalid"),
+        ([{"code": "TP.TEST", "name": "Test", "frequency": "hourly"}], "Unsupported"),
+    ],
+)
+def test_rejects_invalid_config(tmp_path, series, message):
+    config_path = tmp_path / "series.json"
+    write_config(config_path, series=series)
+
+    with pytest.raises(ValueError, match=message):
+        load_curated_config(config_path)

@@ -67,6 +67,47 @@ def test_missing_observation_is_none_and_never_zero():
     assert result[0].value is None
 
 
+def test_monthly_period_label_is_normalized_to_first_day():
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(
+            200, json={"items": [{"Tarih": "2021-2", "TP_KFE_TR": "16.98000000"}]}
+        )
+    )
+    with EVDSClient(make_settings(), transport=transport) as client:
+        result = client.fetch_series(
+            "TP.KFE.TR",
+            start_date=date(2021, 1, 1),
+            end_date=date(2021, 3, 31),
+        )
+
+    assert result[0].period == date(2021, 2, 1)
+
+
+def test_unknown_period_label_uses_evds_unix_timestamp():
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "Tarih": "unknown-label",
+                        "TP_TEST": "1",
+                        "UNIXTIME": {"$numberLong": "1609455600"},
+                    }
+                ]
+            },
+        )
+    )
+    with EVDSClient(make_settings(), transport=transport) as client:
+        result = client.fetch_series(
+            "TP.TEST",
+            start_date=date(2021, 1, 1),
+            end_date=date(2021, 1, 1),
+        )
+
+    assert result[0].period == date(2021, 1, 1)
+
+
 def test_missing_api_key_fails_before_network():
     transport = httpx.MockTransport(
         lambda _request: pytest.fail("network must not be called without a key")
