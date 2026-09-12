@@ -28,6 +28,13 @@ from kkb_agent.agent.history import (
     SnapshotLineageError,
     SnapshotNotFoundError,
 )
+from kkb_agent.agent.planner import (
+    OperationPlanner,
+    PlannerError,
+    PlannerModelError,
+    PlannerValidationError,
+    operation_plan_schema,
+)
 
 __all__ = [
     "DuplicateFindingError",
@@ -41,8 +48,12 @@ __all__ = [
     "OperationExecutor",
     "OperationHandler",
     "OperationHandlerError",
+    "OperationPlanner",
     "OperationPostconditionError",
     "OperationVersionError",
+    "PlannerError",
+    "PlannerModelError",
+    "PlannerValidationError",
     "SnapshotConflictError",
     "SnapshotHistoryError",
     "SnapshotLineageError",
@@ -51,5 +62,6 @@ __all__ = [
     "UnsupportedOperationError",
     "create_finding",
     "create_operation_executor",
+    "operation_plan_schema",
     "revise_finding",
 ]
