@@ -55,8 +55,9 @@ invariants. The executor does not sort, truncate, pad or repair a handler result
 ## Production `index_column` handler
 
 The production composition point `create_operation_executor()` registers the completed
-`OperationType.INDEX_COLUMN` and `OperationType.DEFLATE_COLUMN` handlers. Both are
-deterministic and have no database, network or model dependency.
+`OperationType.INDEX_COLUMN`, `OperationType.DEFLATE_COLUMN` and
+`OperationType.REVERT_TO` behavior. All are deterministic and have no database, network or
+model dependency.
 
 For source value `value` and the value at the exact requested base date `base_value`, it
 calculates:
@@ -120,7 +121,30 @@ No production handler is registered by default. The operation-specific backlog t
 still own:
 
 - catalog fetch and left-join behavior for `add_column`;
-- historical snapshot restoration for `revert_to`.
 
 Persistence, conversation state, planner/MIA integration and numerical postconditions
 remain outside this foundation.
+
+## Snapshot retention and `revert_to`
+
+Each production executor owns an explicit in-memory `FrameSnapshotHistory`; callers may
+inject one into `create_operation_executor(snapshot_history=...)`. It has no global state,
+service locator or hidden persistence. After every successful transition, the executor
+atomically retains immutable analytical snapshots for both the source and successor.
+Operations are never replayed to reconstruct an old version.
+
+A retained snapshot contains frame ID, version, spine, columns, charts and the operation-log
+prefix that proves its place in the current history. Findings are audit evidence rather than
+restorable analytical state and remain on the live frame. This also allows findings to be
+appended at an existing analytical version without creating conflicting snapshots.
+
+For `revert_to(target_version)`, the executor verifies that the target is retained under the
+same frame ID and that its operation prefix matches the current history. It restores the
+target's columns, charts and identical spine, preserves all current findings, then appends
+the revert operation once and advances to `current_version + 1`. It never resets the frame
+version or truncates operations. A finding created after the target remains visible with its
+original `frame_version`, even if its supporting column is absent from the restored current
+analytical state.
+
+Revert construction and history retention validate fully before committing either result.
+Missing, conflicting or unrelated snapshots return no frame and retain no failed transition.

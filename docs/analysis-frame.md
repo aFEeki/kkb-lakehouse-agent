@@ -126,8 +126,10 @@ There is no executable SQL/Python field and no generic expression escape hatch.
 
 The deflation reference identifies the convention settled in DECISIONS.md #9. The target
 and deflator must differ. A revert target must precede the operation's source version.
-Revert records advance the current version; they never erase the log or reset its version
-counter.
+Revert restores retained columns, charts and the identical spine while preserving findings
+as append-only evidence. Revert records advance the current version; they never erase the
+operation log, evidence history or reset the version counter. Historical findings retain
+their original `frame_version`, including findings created after the restored target.
 
 The user-supplied backlog export explicitly includes **"index_column with original
 retained"**, due 2026-09-15, referencing PLAN.md D5. Its requirements are rebasing to
@@ -212,8 +214,9 @@ No executor, transformation, persistence, database access, network call, planner
 retrieval, ingestion, analytical tool, API endpoint, SSE, frontend or rendering change
 is implemented. Conversation ownership/forking (#7), ragged edges (#11), snapshots/live
 refresh (#12) and wider operation boundaries (#6)
-remain open in DECISIONS.md. Full-history retention/compaction and historical evidence
-resolution need future persistence decisions; v1 explicitly stores complete history.
+remain open in DECISIONS.md. Durable retention/compaction and historical evidence resolution
+need future persistence decisions; the executor currently provides explicit instance-scoped
+in-memory analytical snapshots and v1 stores complete operation and finding history.
 
 Verification:
 
