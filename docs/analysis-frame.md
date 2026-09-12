@@ -91,9 +91,19 @@ Historical findings retain references to their original version; validating thos
 references requires that historical snapshot, and is deliberately deferred.
 
 A revision is a NEW finding that references an earlier finding in the ordered list.
-Earlier statements/evidence are retained. No `revise_finding` method is implemented.
-Stored status is the status recorded at creation; future consumers determine effective
-supersession from later `supersedes` links, without editing historical records.
+Earlier statements/evidence are retained. `kkb_agent.agent.create_finding(...)` appends a
+current-version finding and `kkb_agent.agent.revise_finding(...)` appends a new finding whose
+`supersedes` field identifies its direct predecessor. Repeated revisions target the newest
+finding, producing an ordered chain; branching from a finding that already has a direct
+revision is rejected. Stored status is the status recorded at creation. Consumers determine
+effective supersession from later `supersedes` links, without editing historical records.
+
+Both APIs reconstruct and validate a new immutable `AnalysisFrame`. They preserve frame ID,
+version, spine, columns, charts and operation history. Finding updates are evidence updates
+at the current analytical version, so they do not introduce an `OperationType`, increment
+the frame version or append to the analytical operation log. Duplicate IDs, nonexistent
+revision targets, unknown current supporting columns and out-of-range evidence fail before
+a new frame is returned. The input remains unchanged on every failure.
 
 `ChartSpec` contains chart ID, type (`line`, `bar`, `scatter`), spine key, ordered
 column keys, title and `axis_policy="by_unit"`. References must exist in the current
@@ -131,8 +141,9 @@ in this contract.
 
 The export also explicitly names `add_series_column`, `deflate_column`, `revert_to`
 and `revise_finding`. `add_column` is this contract's existing name for the series-add
-operation; it is not renamed here. Finding revision remains represented by the
-existing `Finding.supersedes` link; a command schema for it is a separate follow-up.
+operation; it is not renamed here. Finding revision uses the existing
+`Finding.supersedes` link through the append-only agent service and does not expand the
+closed analytical operation vocabulary.
 The backlog requires retaining the original column for deflation as well as indexing;
 future executor work must honor that requirement. This audit does not add unrelated
 commands or choose output-key policies.
