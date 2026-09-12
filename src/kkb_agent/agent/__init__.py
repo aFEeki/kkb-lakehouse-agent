@@ -28,6 +28,15 @@ from kkb_agent.agent.history import (
     SnapshotLineageError,
     SnapshotNotFoundError,
 )
+from kkb_agent.agent.narrative import (
+    ComputedToolResult,
+    NarrativeCitation,
+    NarrativeError,
+    NarrativeGenerator,
+    NarrativeModelError,
+    NarrativeResult,
+    NarrativeValidationError,
+)
 from kkb_agent.agent.planner import (
     OperationPlanner,
     PlannerError,
@@ -38,12 +47,19 @@ from kkb_agent.agent.planner import (
 
 __all__ = [
     "DuplicateFindingError",
+    "ComputedToolResult",
     "FindingAlreadySupersededError",
     "FindingEvidenceError",
     "FindingNotFoundError",
     "FindingServiceError",
     "FrameSnapshot",
     "FrameSnapshotHistory",
+    "NarrativeCitation",
+    "NarrativeError",
+    "NarrativeGenerator",
+    "NarrativeModelError",
+    "NarrativeResult",
+    "NarrativeValidationError",
     "OperationExecutionError",
     "OperationExecutor",
     "OperationHandler",
