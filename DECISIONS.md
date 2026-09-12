@@ -15,7 +15,7 @@ the reasoning in [PLAN.md](PLAN.md) rather than restating it here.
 | 6 | How much the model may do | Day 1 | open |
 | 7 | Conversation state shape | Day 1 | open |
 | 8 | Output language | Day 1 | open |
-| 9 | Deflation convention | Day 3 | open |
+| 9 | Deflation convention | Day 3 | **settled** — CPI base-period constant prices v1 |
 | 10 | Which "housing loan" | Day 3 | **decide before ingestion** |
 | 11 | Ragged edge policy | Day 3 | open |
 | 12 | Snapshot or live | Day 3 | open |
@@ -167,11 +167,21 @@ exception, #10, which gates ingestion.
 
 ### 9. Deflation convention
 
-Which index (TÜFE headline, ÜFE, housing-specific deflator), which base period, and whether
-"reel" means constant prices or index-normalised. Turn 2 of the demo depends on this being
-fixed and stated.
+Use `cpi_base_period_constant_prices_v1`. The deflator is the headline CPI/TÜFE price-level
+index. Convert a nominal monetary stock to purchasing-power terms at the selected base
+period's consumer prices with:
 
-- **Decision:**
+```text
+real_t = nominal_t * CPI_base / CPI_t
+```
+
+The base date must match exactly. The result remains in the source currency and scale at
+base-date prices, so `real_base == nominal_base`; it is not an index rebased to 100. CPI
+levels must be positive and finite. Rates, percentage changes and non-CPI indexes cannot be
+used as the deflator. Missing observations remain missing without interpolation or nearest
+period substitution. The original nominal series is retained.
+
+- **Decision:** settled — `cpi_base_period_constant_prices_v1`
 - **Owner:**
 
 ### 10. Which "housing loan" we mean — decide before ingestion

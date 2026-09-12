@@ -37,7 +37,7 @@ def operation(**overrides):
                 "column_key": "a",
                 "deflator_column_key": "b",
                 "base_date": "2025-01-01",
-                "convention_reference": "constant-prices-v1",
+                "convention_reference": "cpi_base_period_constant_prices_v1",
             },
             0,
         ),

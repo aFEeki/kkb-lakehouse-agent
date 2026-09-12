@@ -1,5 +1,22 @@
 """Production operation handlers and their domain errors."""
 
+from kkb_agent.agent.handlers.deflate_column import (
+    DEFLATION_CONVENTION,
+    DeflateBasePeriodMissingError,
+    DeflateBasePeriodNotFoundError,
+    DeflateCalculationError,
+    DeflateColumnCollisionError,
+    DeflateColumnError,
+    DeflateColumnNotFoundError,
+    DeflateColumnTypeError,
+    DeflateConventionError,
+    DeflateDeflatorMeasureError,
+    DeflateDeflatorValueError,
+    DeflateSpineTypeError,
+    DeflateTargetMeasureError,
+    deflate_column_handler,
+    deflated_column_key,
+)
 from kkb_agent.agent.handlers.index_column import (
     IndexBasePeriodMissingError,
     IndexBasePeriodNotFoundError,
@@ -15,6 +32,19 @@ from kkb_agent.agent.handlers.index_column import (
 )
 
 __all__ = [
+    "DEFLATION_CONVENTION",
+    "DeflateBasePeriodMissingError",
+    "DeflateBasePeriodNotFoundError",
+    "DeflateCalculationError",
+    "DeflateColumnCollisionError",
+    "DeflateColumnError",
+    "DeflateColumnNotFoundError",
+    "DeflateColumnTypeError",
+    "DeflateConventionError",
+    "DeflateDeflatorMeasureError",
+    "DeflateDeflatorValueError",
+    "DeflateSpineTypeError",
+    "DeflateTargetMeasureError",
     "IndexBasePeriodMissingError",
     "IndexBasePeriodNotFoundError",
     "IndexBaseValueZeroError",
@@ -24,6 +54,8 @@ __all__ = [
     "IndexColumnNotFoundError",
     "IndexColumnTypeError",
     "IndexSpineTypeError",
+    "deflate_column_handler",
+    "deflated_column_key",
     "index_column_handler",
     "indexed_column_key",
 ]

@@ -54,9 +54,9 @@ invariants. The executor does not sort, truncate, pad or repair a handler result
 
 ## Production `index_column` handler
 
-The production composition point `create_operation_executor()` currently registers only
-`OperationType.INDEX_COLUMN`. The handler is deterministic and has no database, network or
-model dependency.
+The production composition point `create_operation_executor()` registers the completed
+`OperationType.INDEX_COLUMN` and `OperationType.DEFLATE_COLUMN` handlers. Both are
+deterministic and have no database, network or model dependency.
 
 For source value `value` and the value at the exact requested base date `base_value`, it
 calculates:
@@ -88,13 +88,38 @@ The handler returns an uncommitted candidate: frame ID, version, spine, existing
 findings, charts and operation history are preserved. `OperationExecutor` subsequently owns
 the one log append and one version increment.
 
+## Production `deflate_column` handler
+
+The handler accepts only the `cpi_base_period_constant_prices_v1` convention settled in
+DECISIONS.md #9. For a nominal monetary stock and headline-CPI price-level column it uses:
+
+```text
+real_t = nominal_t * CPI_base / CPI_t
+```
+
+The result is expressed in the target's currency and scale at base-date prices; it is not
+rebased to 100. The output key is
+`{target_key}__deflated_by_{deflator_key}_{YYYY-MM-DD}` and its label is
+`{target label} (real, {deflator label}, YYYY-MM-DD prices)`.
+
+The target must be numeric with `measure_type="stock"`; the deflator must be numeric with
+`measure_type="index"`. CPI levels must be positive and finite. The exact base date and its
+CPI observation must exist. Missing target or CPI observations outside the base row produce
+`None`; the handler never fills, interpolates, resamples or selects another period. As with
+`index_column`, a datetime spine is rejected because the date parameter cannot identify an
+exact timestamp.
+
+The original target, deflator and all other columns retain their order and values. The real
+column is appended with the target's unit and scale. Its recursive lineage records both the
+nominal and CPI parents, plus the convention, base date, deflator key and formula. Version
+and operation history remain unchanged until the executor commits the candidate.
+
 ## Deferred operation behavior
 
 No production handler is registered by default. The operation-specific backlog tasks
 still own:
 
 - catalog fetch and left-join behavior for `add_column`;
-- deflator selection and constant-price arithmetic for `deflate_column`;
 - historical snapshot restoration for `revert_to`.
 
 Persistence, conversation state, planner/MIA integration and numerical postconditions
