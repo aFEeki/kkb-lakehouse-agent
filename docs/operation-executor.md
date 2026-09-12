@@ -52,6 +52,42 @@ failures become `OperationPostconditionError`. Version mismatches use
 Spine length, ordering, values, key and kind are checked through the existing frame
 invariants. The executor does not sort, truncate, pad or repair a handler result.
 
+## Production `index_column` handler
+
+The production composition point `create_operation_executor()` currently registers only
+`OperationType.INDEX_COLUMN`. The handler is deterministic and has no database, network or
+model dependency.
+
+For source value `value` and the value at the exact requested base date `base_value`, it
+calculates:
+
+```text
+indexed_value = value / base_value * 100
+```
+
+The output key is `{source_key}__index_{YYYY-MM-DD}`. The label is
+`{source label} (Index, YYYY-MM-DD = 100)`. Both are deterministic. An existing output key
+is an error; the handler never overwrites or invents a numbered suffix.
+
+Only a `date` spine is accepted. `IndexColumnParameters` carries a calendar date and cannot
+identify one exact row on a datetime spine without an additional timestamp contract. The
+handler therefore rejects datetime spines instead of matching by date or choosing a nearby
+timestamp. It never sorts, resamples, interpolates or selects a neighbor.
+
+The exact base date must exist, and its source value must be present, finite and nonzero.
+Other missing values remain `None`. Every calculated value must be finite. Numeric strings
+and booleans are not accepted as numbers.
+
+The source column and its position are retained unchanged; the result is appended as a
+`dtype="number"`, `origin="derived"`, `measure_type="index"` column with a dimensionless
+index unit. Its recursive parent lineage captures the current frame ID/version, source key
+and exact source lineage. Its `index_column` transformation records implementation version
+`1`, the base date and fixed base value `100`.
+
+The handler returns an uncommitted candidate: frame ID, version, spine, existing columns,
+findings, charts and operation history are preserved. `OperationExecutor` subsequently owns
+the one log append and one version increment.
+
 ## Deferred operation behavior
 
 No production handler is registered by default. The operation-specific backlog tasks
@@ -59,7 +95,6 @@ still own:
 
 - catalog fetch and left-join behavior for `add_column`;
 - deflator selection and constant-price arithmetic for `deflate_column`;
-- rebase-to-100 arithmetic and base-value checks for `index_column`;
 - historical snapshot restoration for `revert_to`.
 
 Persistence, conversation state, planner/MIA integration and numerical postconditions
