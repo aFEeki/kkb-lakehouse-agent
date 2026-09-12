@@ -177,6 +177,11 @@ data/           Yerel veri gölü (git dışı) — bronze → silver → gold
 
 ## Çalıştırma
 
+**Mevcut durum:** Yerel geliştirme temeli, `/health` API'si ve sağlık ekranı hazırdır.
+Kurulum ve çalışan komutlar için [yerel geliştirme rehberine](docs/local-development.md)
+bakın. Aşağıdaki lakehouse oluşturma akışı hedef kullanımdır; veri derleme script'i
+ve invariant testleri henüz uygulanmamıştır.
+
 ```bash
 cp .env.example .env          # MIA_API_KEY, EVDS_API_KEY
 uv venv && source .venv/bin/activate

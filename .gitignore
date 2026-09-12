@@ -42,3 +42,14 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Local verification and runtime artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+data/uploads/
