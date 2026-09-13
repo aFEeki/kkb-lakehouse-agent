@@ -6,9 +6,19 @@ from types import MappingProxyType
 from pydantic import ValidationError
 
 from kkb_agent.agent.history import FrameSnapshotHistory
-from kkb_agent.frame import AnalysisFrame, Operation, OperationType, assert_spine_intact
+from kkb_agent.frame import (
+    AnalysisFrame,
+    Operation,
+    OperationType,
+    SpineViolation,
+    assert_existing_columns_intact,
+    assert_spine_intact,
+)
 
 OperationHandler = Callable[[AnalysisFrame, Operation], AnalysisFrame]
+_COLUMN_ADDING_OPERATIONS = frozenset(
+    {OperationType.ADD_COLUMN, OperationType.DEFLATE_COLUMN, OperationType.INDEX_COLUMN}
+)
 
 
 class OperationExecutionError(RuntimeError):
@@ -99,7 +109,7 @@ class OperationExecutor:
 
         try:
             candidate = handler(frame, operation)
-        except OperationExecutionError:
+        except (OperationExecutionError, SpineViolation):
             raise
         except Exception as exc:
             raise OperationHandlerError(
@@ -173,9 +183,11 @@ class OperationExecutor:
                 f"Handler for {kind!r} did not return an AnalysisFrame at frame version "
                 f"{frame.version}"
             )
+        assert_spine_intact(frame.spine, candidate.spine)
+        if operation.kind in _COLUMN_ADDING_OPERATIONS:
+            assert_existing_columns_intact(frame.columns, candidate.columns)
         try:
             candidate = AnalysisFrame.model_validate(candidate)
-            assert_spine_intact(frame.spine, candidate.spine)
         except (ValidationError, ValueError) as exc:
             raise OperationPostconditionError(
                 f"Handler for {kind!r} produced an invalid candidate at frame version "

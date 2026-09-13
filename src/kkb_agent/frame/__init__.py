@@ -5,6 +5,7 @@ from kkb_agent.frame.invariants import (
     ColumnAlignmentViolation,
     SpineViolation,
     assert_columns_aligned,
+    assert_existing_columns_intact,
     assert_spine_intact,
 )
 from kkb_agent.frame.models import (
@@ -51,5 +52,6 @@ __all__ = [
     "Transformation",
     "Unit",
     "assert_columns_aligned",
+    "assert_existing_columns_intact",
     "assert_spine_intact",
 ]

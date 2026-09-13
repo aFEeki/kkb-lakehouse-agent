@@ -11,13 +11,53 @@ from kkb_agent.agent import (
     UnimplementedOperationError,
     UnsupportedOperationError,
 )
-from kkb_agent.frame import AnalysisFrame, Operation, OperationType, Spine
+from kkb_agent.frame import (
+    AnalysisFrame,
+    Column,
+    Lineage,
+    MetadataEntry,
+    Operation,
+    OperationType,
+    SourceReference,
+    Spine,
+    SpineViolation,
+    Unit,
+)
 
 
 def make_frame() -> AnalysisFrame:
     return AnalysisFrame(
         frame_id="frame-a",
         spine=Spine(values=[date(2025, 1, 1), date(2025, 2, 1)]),
+    )
+
+
+def make_source_column(*, values=(10.0, 20.0), metadata=()) -> Column:
+    return Column(
+        key="existing",
+        label="Existing",
+        dtype="number",
+        values=values,
+        measure_type="stock",
+        unit=Unit(symbol="TRY", scale=1_000_000.0),
+        origin="source",
+        lineage=Lineage(
+            sources=[
+                SourceReference(
+                    source_type="evds",
+                    reference="TP.EXISTING",
+                    metadata=metadata,
+                )
+            ]
+        ),
+    )
+
+
+def make_frame_with_column() -> AnalysisFrame:
+    return AnalysisFrame(
+        frame_id="frame-a",
+        spine=Spine(values=[date(2025, 1, 1), date(2025, 2, 1)]),
+        columns=[make_source_column()],
     )
 
 
@@ -108,24 +148,106 @@ def test_handler_exception_is_atomic_and_preserves_cause():
 
 
 @pytest.mark.parametrize(
-    "spine",
+    ("case", "spine"),
     [
-        Spine(values=[date(2025, 1, 1)]),
-        Spine(values=[date(2025, 2, 1), date(2025, 1, 1)]),
-        Spine(values=[date(2025, 1, 1), date(2025, 3, 1)]),
-        Spine(key="other", values=[date(2025, 1, 1), date(2025, 2, 1)]),
+        ("missing", Spine(values=[date(2025, 1, 1)])),
+        (
+            "extra",
+            Spine(values=[date(2025, 1, 1), date(2025, 2, 1), date(2025, 3, 1)]),
+        ),
+        ("substituted", Spine(values=[date(2025, 1, 1), date(2025, 3, 1)])),
+        ("reordered", Spine(values=[date(2025, 2, 1), date(2025, 1, 1)])),
+        ("key-changed", Spine(key="other", values=[date(2025, 1, 1), date(2025, 2, 1)])),
     ],
 )
-def test_changed_spine_is_rejected_atomically(spine):
+def test_changed_spine_is_rejected_atomically_as_spine_violation(case, spine):
     frame = make_frame()
 
     def change_spine(frame, operation):
-        return AnalysisFrame(**(frame.model_dump() | {"spine": spine}))
+        return AnalysisFrame.model_construct(**(frame.model_dump() | {"spine": spine}))
 
-    with pytest.raises(OperationPostconditionError, match="invalid candidate"):
+    with pytest.raises(SpineViolation, match="identity"):
         OperationExecutor({OperationType.ADD_COLUMN: change_spine}).execute(frame, make_operation())
     assert frame.version == 0
     assert frame.operations == ()
+
+
+def test_duplicate_spine_from_model_construct_is_rejected_as_spine_violation():
+    frame = make_frame()
+    duplicate = Spine.model_construct(
+        key="time",
+        kind="date",
+        label=None,
+        values=(date(2025, 1, 1), date(2025, 1, 1)),
+    )
+
+    def duplicate_spine(frame, operation):
+        return AnalysisFrame.model_construct(**(frame.model_dump() | {"spine": duplicate}))
+
+    with pytest.raises(SpineViolation, match="unique"):
+        OperationExecutor({OperationType.ADD_COLUMN: duplicate_spine}).execute(
+            frame, make_operation()
+        )
+    assert frame.version == 0
+    assert frame.operations == ()
+
+
+@pytest.mark.parametrize(
+    "mutated",
+    [
+        make_source_column(values=(999.0, 20.0)),
+        make_source_column(metadata=[MetadataEntry(key="revision", value="changed")]),
+    ],
+    ids=["value", "lineage-metadata"],
+)
+def test_existing_column_mutation_propagates_as_spine_violation(mutated):
+    frame = make_frame_with_column()
+
+    def mutate_column(frame, operation):
+        return AnalysisFrame(**(frame.model_dump() | {"columns": [mutated]}))
+
+    with pytest.raises(SpineViolation, match="changed content"):
+        OperationExecutor({OperationType.ADD_COLUMN: mutate_column}).execute(
+            frame, make_operation()
+        )
+    assert frame.columns == (make_source_column(),)
+    assert frame.version == 0
+
+
+def test_valid_append_only_column_addition_preserves_existing_serialized_bytes():
+    frame = make_frame_with_column()
+    appended = Column(
+        key="new",
+        label="New",
+        dtype="number",
+        values=(1.0, None),
+        origin="source",
+        lineage=Lineage(sources=[SourceReference(source_type="evds", reference="TP.NEW")]),
+    )
+    before_bytes = frame.columns[0].model_dump_json().encode("utf-8")
+
+    def append_column(frame, operation):
+        return AnalysisFrame(**(frame.model_dump() | {"columns": [*frame.columns, appended]}))
+
+    result = OperationExecutor({OperationType.ADD_COLUMN: append_column}).execute(
+        frame, make_operation()
+    )
+
+    assert result.version == 1
+    assert result.columns == (frame.columns[0], appended)
+    assert result.columns[0].model_dump_json().encode("utf-8") == before_bytes
+
+
+def test_malformed_model_construct_column_fails_deterministically():
+    frame = make_frame_with_column()
+
+    def malformed_column(frame, operation):
+        return frame.model_copy(update={"columns": (object(),)})
+
+    with pytest.raises(SpineViolation, match="cannot be serialized safely"):
+        OperationExecutor({OperationType.ADD_COLUMN: malformed_column}).execute(
+            frame, make_operation()
+        )
 
 
 def test_handler_cannot_rewrite_history_or_commit_version():

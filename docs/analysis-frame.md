@@ -14,7 +14,7 @@ Import public types from `kkb_agent.frame`:
 - `Operation`, `OperationType`, `AddColumnParameters`, `DeflateColumnParameters`,
   `IndexColumnParameters`,
   `RevertToParameters`.
-- `assert_spine_intact`, `assert_columns_aligned`, `SpineViolation`,
+- `assert_spine_intact`, `assert_existing_columns_intact`, `assert_columns_aligned`, `SpineViolation`,
   `ColumnAlignmentViolation`.
 
 `models.py` defines snapshots and evidence. `operations.py` defines audit records and
@@ -37,6 +37,14 @@ source columns literally named `date`. Non-temporal row identities are outside v
 `assert_spine_intact(before, after)` compares key, kind, values and order. A label
 change is presentation-only. Shortening, extending, reordering or replacing an
 identity raises `SpineViolation`.
+
+For `add_column`, `deflate_column` and `index_column`, the executor also calls
+`assert_existing_columns_intact(before, after)`. Existing columns must remain the same
+ordered prefix. Each column's UTF-8 encoded `model_dump_json()` is compared, so values,
+labels, units, measure metadata, origin and recursive lineage/provenance must all remain
+byte-identical. The invariant permits zero or more appended columns; operation-specific
+handlers remain responsible for deciding what new columns they produce. `revert_to` is
+excluded because restoring an earlier retained column snapshot is its intended behavior.
 
 A `Column` has a stable `key` separate from its `label`, a `dtype`, ordered `values`,
 optional `measure_type` and `unit`, `origin`, and mandatory `lineage`.
