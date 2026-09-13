@@ -47,3 +47,19 @@ r = client.chat.completions.create(
 
 - Rate limit / 429 behaviour - push until it breaks, separately
 - OCR model - needs a PNG, see SCRUM-60
+
+## Rate limits (SCRUM-35)
+
+Probed 2026-09-13 13:24 with 111 minimal requests (thinking off, 8-token completions), so this measures request rate rather than token throughput.
+
+| Test | Result |
+|---|---|
+| 1 concurrent | ok=1, 429=0, median 0.98s |
+| 2 concurrent | ok=2, 429=0, median 2.79s |
+| 4 concurrent | ok=4, 429=0, median 1.02s |
+| 8 concurrent | ok=8, 429=0, median 0.25s |
+| 16 concurrent | ok=16, 429=0, median 0.83s |
+| sequential burst | 80 ok, 0 rate limited |
+| embedding batch of 64 | 64 vectors in 1.40s (dim 4096) |
+
+**Caveat:** absence of a 429 within this budget is not proof there is no limit. Treat these as a floor.
