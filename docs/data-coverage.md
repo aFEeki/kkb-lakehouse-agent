@@ -12,9 +12,9 @@ are gaps, not omissions.
 | Source | Status | Coverage |
 |---|---|---|
 | BDDK Aylık Bülten | **acquired** | 2021-01 → 2026-06, 17 tables, Sektör only |
+| TCMB EVDS | **first subset acquired** | 22 series, 2021-01 → 2026-06 |
 | BDDK Haftalık Bülten | **out of scope for v1** | see below |
 | BDDK FinTürk | **out of scope for v1** | see below |
-| TCMB EVDS | **not started** | blocked on API key |
 | Live URLs | **not started** | on-demand, no pre-acquisition |
 
 ---
@@ -92,22 +92,54 @@ and quarterly by nature.
 The brief names all three. This gap is a scope decision, not an oversight, and should be
 presented as such.
 
+**If weekly is brought back into scope, note that it is a different shape from monthly.**
+The monthly bulletin is a JSON endpoint; the weekly page is a server-rendered HTML table
+driven by `yil` / `donemId` / `para` selects, with no JSON endpoint and no file download.
+Acquiring it means HTML table parsing, not Excel and not JSON — and numeric cells arrive as
+Turkish-formatted text, so `1.234,56` conversion would genuinely apply there.
+
 ---
 
-## TCMB EVDS — not started
+## TCMB EVDS — first subset acquired
 
-**Blocked on an API key.** `EVDS_API_KEY` is unset; the API returns a redirect to login
-without one.
+Scope declared in `config/evds-series.json`; ingestion in `scripts/ingest_evds_curated.py`.
+Output is one parquet per series under `data/silver/evds/` with a `coverage.json`, both
+gitignored. The committed config is the reproducible declaration of scope.
 
-This is the larger gap of the two, because EVDS carries series the published scenario
-depends on and BDDK does not provide:
+| | |
+|---|---|
+| Series configured | **22** |
+| Frequencies | 13 monthly, 7 weekly, 2 daily |
+| Requested range | 2021-01-01 → 2026-06-30 |
+| Full EVDS catalog | **no** — `is_full_evds_catalog: false` |
 
-- Housing loan **interest rates** (turn 1)
-- **TÜFE** for deflation (turn 2)
-- **House price index** (turn 3)
+### All three demo-scenario series are present
 
-It is also where a housing loan **flow** series would live. BDDK table 4 gives the balance
-outstanding, which is not the same measure the scenario asks for.
+| Turn | Series | Code | Frequency |
+|---|---|---|---|
+| 1 | Konut kredisi faizi | `TP.KTF12` | weekly |
+| 2 | Tüketici Fiyat Endeksi | `TP.GENENDEKS.T1` | monthly |
+| 3 | Konut Fiyat Endeksi | `TP.KFE.TR` | monthly |
+
+Plus loan rates by type, FX, reserves, deposits including KKM, banking-sector aggregates,
+and capacity utilisation.
+
+### Two things this subset does not resolve
+
+**The housing loan interest rate is weekly; the demo table is monthly.** Turn 1 needs a
+frequency conversion, and because it is a rate the aggregation rule is mean or period-end,
+never a sum. See SCRUM-26.
+
+**There is still no housing loan *flow* series.** BDDK table 4 gives the balance
+outstanding and EVDS provides the rate, but neither gives *kullandırılan* — new lending
+extended, which is what the published question literally asks for. Decision #10 remains
+open and now has to be answered from what actually exists rather than in the abstract.
+
+### Not acquired
+
+22 series against a planned pool of roughly 250 (DECISIONS #4). The configured `known_gaps`
+records this explicitly. Questions outside the covered categories cannot currently be
+answered, and that should be stated rather than approximated.
 
 ---
 
