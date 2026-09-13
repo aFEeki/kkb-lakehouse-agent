@@ -14,6 +14,7 @@ from kkb_agent.transform.cumulative import (
     CumulativeMode,
     classify,
     decumulate,
+    resolve_by_statement,
     ytd_closure_holds,
 )
 
@@ -102,3 +103,39 @@ def test_missing_prior_observation_is_not_fabricated():
     s.iloc[4] = float("nan")
     out = decumulate(s, CumulativeMode.YTD)
     assert out.isna().any()
+
+
+class TestStatementKindResolution:
+    """SCRUM-93 - settle ambiguous cases on accounting grounds, not by eye."""
+
+    def test_income_statement_is_year_to_date(self):
+        mode, why = resolve_by_statement(2, "Alınan Kar Payları", CumulativeMode.AMBIGUOUS)
+        assert mode is CumulativeMode.YTD
+        assert "income statement" in why
+
+    def test_balance_sheet_does_not_accumulate(self):
+        """A loan balance is what is outstanding, not every loan ever written."""
+        mode, why = resolve_by_statement(4, "Bireysel Kredi Kartları", CumulativeMode.AMBIGUOUS)
+        assert mode is CumulativeMode.NONE
+        assert "balance sheet" in why
+
+    def test_off_balance_sheet_commitments_are_positions(self):
+        mode, _ = resolve_by_statement(14, "b) Kesin Teminat Mektupları", CumulativeMode.AMBIGUOUS)
+        assert mode is CumulativeMode.NONE
+
+    def test_period_profit_on_the_balance_sheet_is_still_year_to_date(self):
+        """BDDK shows the P&L result on the balance sheet; it accumulates regardless."""
+        mode, why = resolve_by_statement(1, "Dönem Karı (Zararı)", CumulativeMode.AMBIGUOUS)
+        assert mode is CumulativeMode.YTD
+        assert "balance sheet" in why
+
+    def test_a_confident_pattern_result_is_never_overwritten(self):
+        """Data disagreeing with the accounting is information, not noise."""
+        mode, why = resolve_by_statement(4, "Tüketici Kredileri", CumulativeMode.YTD)
+        assert mode is CumulativeMode.YTD
+        assert "not consulted" in why
+
+    def test_unknown_table_stays_ambiguous(self):
+        mode, why = resolve_by_statement(99, "whatever", CumulativeMode.AMBIGUOUS)
+        assert mode is CumulativeMode.AMBIGUOUS
+        assert "no statement kind" in why
