@@ -1,0 +1,1270 @@
+{
+  "$defs": {
+    "AddColumnParameters": {
+      "additionalProperties": false,
+      "properties": {
+        "column_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Column Key",
+          "type": "string"
+        },
+        "series_reference": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Series Reference",
+          "type": "string"
+        }
+      },
+      "required": [
+        "series_reference",
+        "column_key"
+      ],
+      "title": "AddColumnParameters",
+      "type": "object"
+    },
+    "AnalysisFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "charts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ChartSpec"
+          },
+          "title": "Charts",
+          "type": "array"
+        },
+        "columns": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Column"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "findings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "frame_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Frame Id",
+          "type": "string"
+        },
+        "operations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Operation"
+          },
+          "title": "Operations",
+          "type": "array"
+        },
+        "spine": {
+          "$ref": "#/$defs/Spine"
+        },
+        "version": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "frame_id",
+        "spine"
+      ],
+      "title": "AnalysisFrame",
+      "type": "object"
+    },
+    "ChartSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "axis_policy": {
+          "const": "by_unit",
+          "default": "by_unit",
+          "title": "Axis Policy",
+          "type": "string"
+        },
+        "chart_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Chart Id",
+          "type": "string"
+        },
+        "chart_type": {
+          "enum": [
+            "line",
+            "bar",
+            "scatter"
+          ],
+          "title": "Chart Type",
+          "type": "string"
+        },
+        "column_keys": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Column Keys",
+          "type": "array"
+        },
+        "spine_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Spine Key",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "required": [
+        "chart_id",
+        "chart_type",
+        "spine_key",
+        "column_keys"
+      ],
+      "title": "ChartSpec",
+      "type": "object"
+    },
+    "Column": {
+      "additionalProperties": false,
+      "properties": {
+        "dtype": {
+          "enum": [
+            "integer",
+            "number",
+            "string",
+            "boolean"
+          ],
+          "title": "Dtype",
+          "type": "string"
+        },
+        "key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Label",
+          "type": "string"
+        },
+        "lineage": {
+          "$ref": "#/$defs/Lineage"
+        },
+        "measure_type": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measure Type"
+        },
+        "origin": {
+          "enum": [
+            "source",
+            "derived"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Unit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "values": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "dtype",
+        "values",
+        "origin",
+        "lineage"
+      ],
+      "title": "Column",
+      "type": "object"
+    },
+    "CompletionEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "analysis_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Analysis Id",
+          "type": "string"
+        },
+        "event_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "frame_version": {
+          "minimum": 0,
+          "title": "Frame Version",
+          "type": "integer"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/CompletionPayload"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "type": {
+          "const": "completion",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "analysis_id",
+        "sequence",
+        "frame_version",
+        "occurred_at",
+        "type",
+        "payload"
+      ],
+      "title": "CompletionEvent",
+      "type": "object"
+    },
+    "CompletionPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "enum": [
+            "succeeded",
+            "failed"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome"
+      ],
+      "title": "CompletionPayload",
+      "type": "object"
+    },
+    "DeflateColumnParameters": {
+      "additionalProperties": false,
+      "properties": {
+        "base_date": {
+          "format": "date",
+          "title": "Base Date",
+          "type": "string"
+        },
+        "column_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Column Key",
+          "type": "string"
+        },
+        "convention_reference": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Convention Reference",
+          "type": "string"
+        },
+        "deflator_column_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Deflator Column Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "column_key",
+        "deflator_column_key",
+        "base_date",
+        "convention_reference"
+      ],
+      "title": "DeflateColumnParameters",
+      "type": "object"
+    },
+    "ErrorEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "analysis_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Analysis Id",
+          "type": "string"
+        },
+        "event_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "frame_version": {
+          "minimum": 0,
+          "title": "Frame Version",
+          "type": "integer"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ErrorPayload"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "type": {
+          "const": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "analysis_id",
+        "sequence",
+        "frame_version",
+        "occurred_at",
+        "type",
+        "payload"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "ErrorPayload": {
+      "additionalProperties": false,
+      "description": "Safe client-facing failure data; internal exception fields are not accepted.",
+      "properties": {
+        "code": {
+          "minLength": 1,
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "user_message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "User Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "user_message",
+        "retryable"
+      ],
+      "title": "ErrorPayload",
+      "type": "object"
+    },
+    "Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "caveats": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Caveats",
+          "type": "array"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "finding_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "frame_version": {
+          "minimum": 0,
+          "title": "Frame Version",
+          "type": "integer"
+        },
+        "producing_tool": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Producing Tool",
+          "type": "string"
+        },
+        "spine_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpineRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "statement": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Statement",
+          "type": "string"
+        },
+        "status": {
+          "default": "active",
+          "enum": [
+            "active",
+            "superseded",
+            "withdrawn"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supersedes"
+        },
+        "supporting_column_keys": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Supporting Column Keys",
+          "type": "array"
+        }
+      },
+      "required": [
+        "finding_id",
+        "statement",
+        "frame_version",
+        "supporting_column_keys",
+        "producing_tool"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "IndexColumnParameters": {
+      "additionalProperties": false,
+      "description": "Rebase to 100 at base_date; the future executor retains the original column.",
+      "properties": {
+        "base_date": {
+          "format": "date",
+          "title": "Base Date",
+          "type": "string"
+        },
+        "column_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Column Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "column_key",
+        "base_date"
+      ],
+      "title": "IndexColumnParameters",
+      "type": "object"
+    },
+    "Lineage": {
+      "additionalProperties": false,
+      "properties": {
+        "parents": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ParentLineage"
+          },
+          "title": "Parents",
+          "type": "array"
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SourceReference"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "transformations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Transformation"
+          },
+          "title": "Transformations",
+          "type": "array"
+        }
+      },
+      "title": "Lineage",
+      "type": "object"
+    },
+    "MetadataEntry": {
+      "additionalProperties": false,
+      "description": "An immutable extension entry; namespaced keys can describe source-specific details.",
+      "properties": {
+        "key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "title": "MetadataEntry",
+      "type": "object"
+    },
+    "Operation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/OperationType"
+        },
+        "operation_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AddColumnParameters"
+            },
+            {
+              "$ref": "#/$defs/DeflateColumnParameters"
+            },
+            {
+              "$ref": "#/$defs/IndexColumnParameters"
+            },
+            {
+              "$ref": "#/$defs/RevertToParameters"
+            }
+          ],
+          "title": "Parameters"
+        },
+        "resulting_version": {
+          "minimum": 0,
+          "title": "Resulting Version",
+          "type": "integer"
+        },
+        "source_version": {
+          "minimum": 0,
+          "title": "Source Version",
+          "type": "integer"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "kind",
+        "parameters",
+        "timestamp",
+        "source_version",
+        "resulting_version"
+      ],
+      "title": "Operation",
+      "type": "object"
+    },
+    "OperationType": {
+      "enum": [
+        "add_column",
+        "deflate_column",
+        "index_column",
+        "revert_to"
+      ],
+      "title": "OperationType",
+      "type": "string"
+    },
+    "ParentLineage": {
+      "additionalProperties": false,
+      "properties": {
+        "column_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Column Key",
+          "type": "string"
+        },
+        "frame_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Frame Id",
+          "type": "string"
+        },
+        "frame_version": {
+          "minimum": 0,
+          "title": "Frame Version",
+          "type": "integer"
+        },
+        "lineage": {
+          "$ref": "#/$defs/Lineage"
+        }
+      },
+      "required": [
+        "frame_id",
+        "frame_version",
+        "column_key",
+        "lineage"
+      ],
+      "title": "ParentLineage",
+      "type": "object"
+    },
+    "ResultEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "analysis_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Analysis Id",
+          "type": "string"
+        },
+        "event_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "frame_version": {
+          "minimum": 0,
+          "title": "Frame Version",
+          "type": "integer"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ResultPayload"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "type": {
+          "const": "result",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "analysis_id",
+        "sequence",
+        "frame_version",
+        "occurred_at",
+        "type",
+        "payload"
+      ],
+      "title": "ResultEvent",
+      "type": "object"
+    },
+    "ResultPayload": {
+      "additionalProperties": false,
+      "description": "A self-contained, validated snapshot plus its evidence-bounded answer.",
+      "properties": {
+        "answer": {
+          "minLength": 1,
+          "title": "Answer",
+          "type": "string"
+        },
+        "frame": {
+          "$ref": "#/$defs/AnalysisFrame"
+        }
+      },
+      "required": [
+        "frame",
+        "answer"
+      ],
+      "title": "ResultPayload",
+      "type": "object"
+    },
+    "RevertToParameters": {
+      "additionalProperties": false,
+      "properties": {
+        "target_version": {
+          "minimum": 0,
+          "title": "Target Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target_version"
+      ],
+      "title": "RevertToParameters",
+      "type": "object"
+    },
+    "SourceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "metadata": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MetadataEntry"
+          },
+          "title": "Metadata",
+          "type": "array"
+        },
+        "raw_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Sha256"
+        },
+        "reference": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Reference",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieved At"
+        },
+        "source_type": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Source Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_type",
+        "reference"
+      ],
+      "title": "SourceReference",
+      "type": "object"
+    },
+    "Spine": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "default": "time",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "default": "date",
+          "enum": [
+            "date",
+            "datetime"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "values": {
+          "items": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "format": "date-time",
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "values"
+      ],
+      "title": "Spine",
+      "type": "object"
+    },
+    "SpineRange": {
+      "additionalProperties": false,
+      "description": "Half-open row interval [start, stop) in the finding's evidence version.",
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "stop": {
+          "minimum": 0,
+          "title": "Stop",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "stop"
+      ],
+      "title": "SpineRange",
+      "type": "object"
+    },
+    "StageEndEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "analysis_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Analysis Id",
+          "type": "string"
+        },
+        "event_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "frame_version": {
+          "minimum": 0,
+          "title": "Frame Version",
+          "type": "integer"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/StageEndPayload"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "type": {
+          "const": "stage_end",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "analysis_id",
+        "sequence",
+        "frame_version",
+        "occurred_at",
+        "type",
+        "payload"
+      ],
+      "title": "StageEndEvent",
+      "type": "object"
+    },
+    "StageEndPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "enum": [
+            "succeeded",
+            "failed"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "data_discovery",
+            "data_preparation",
+            "agentic_analytics",
+            "analysis",
+            "verification"
+          ],
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "outcome"
+      ],
+      "title": "StageEndPayload",
+      "type": "object"
+    },
+    "StageStartEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "analysis_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Analysis Id",
+          "type": "string"
+        },
+        "event_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "frame_version": {
+          "minimum": 0,
+          "title": "Frame Version",
+          "type": "integer"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/StageStartPayload"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "type": {
+          "const": "stage_start",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "analysis_id",
+        "sequence",
+        "frame_version",
+        "occurred_at",
+        "type",
+        "payload"
+      ],
+      "title": "StageStartEvent",
+      "type": "object"
+    },
+    "StageStartPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "enum": [
+            "data_discovery",
+            "data_preparation",
+            "agentic_analytics",
+            "analysis",
+            "verification"
+          ],
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage"
+      ],
+      "title": "StageStartPayload",
+      "type": "object"
+    },
+    "ToolSelectedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "analysis_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Analysis Id",
+          "type": "string"
+        },
+        "event_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "frame_version": {
+          "minimum": 0,
+          "title": "Frame Version",
+          "type": "integer"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ToolSelectedPayload"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "type": {
+          "const": "tool_selected",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "analysis_id",
+        "sequence",
+        "frame_version",
+        "occurred_at",
+        "type",
+        "payload"
+      ],
+      "title": "ToolSelectedEvent",
+      "type": "object"
+    },
+    "ToolSelectedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "enum": [
+            "lakehouse",
+            "web_search",
+            "web_url",
+            "anomaly",
+            "causality",
+            "change_detection"
+          ],
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool"
+      ],
+      "title": "ToolSelectedPayload",
+      "type": "object"
+    },
+    "Transformation": {
+      "additionalProperties": false,
+      "description": "Descriptive audit record; name and parameters are never evaluated as code.",
+      "properties": {
+        "implementation_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Implementation Version",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Name",
+          "type": "string"
+        },
+        "parameters": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MetadataEntry"
+          },
+          "title": "Parameters",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "implementation_version"
+      ],
+      "title": "Transformation",
+      "type": "object"
+    },
+    "Unit": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "scale": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "title": "Scale",
+          "type": "number"
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symbol"
+        }
+      },
+      "title": "Unit",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "completion": "#/$defs/CompletionEvent",
+      "error": "#/$defs/ErrorEvent",
+      "result": "#/$defs/ResultEvent",
+      "stage_end": "#/$defs/StageEndEvent",
+      "stage_start": "#/$defs/StageStartEvent",
+      "tool_selected": "#/$defs/ToolSelectedEvent"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/StageStartEvent"
+    },
+    {
+      "$ref": "#/$defs/StageEndEvent"
+    },
+    {
+      "$ref": "#/$defs/ToolSelectedEvent"
+    },
+    {
+      "$ref": "#/$defs/ResultEvent"
+    },
+    {
+      "$ref": "#/$defs/ErrorEvent"
+    },
+    {
+      "$ref": "#/$defs/CompletionEvent"
+    }
+  ]
+}

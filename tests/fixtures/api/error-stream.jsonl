@@ -1,0 +1,5 @@
+{"event_id":"event-error-000","analysis_id":"analysis-housing","sequence":0,"frame_version":0,"occurred_at":"2026-09-13T12:05:00Z","type":"stage_start","payload":{"stage":"data_discovery"}}
+{"event_id":"event-error-001","analysis_id":"analysis-housing","sequence":1,"frame_version":0,"occurred_at":"2026-09-13T12:05:01Z","type":"tool_selected","payload":{"tool":"web_url"}}
+{"event_id":"event-error-002","analysis_id":"analysis-housing","sequence":2,"frame_version":0,"occurred_at":"2026-09-13T12:05:02Z","type":"error","payload":{"code":"SOURCE_UNAVAILABLE","user_message":"Kaynak şu anda okunamıyor.","retryable":true}}
+{"event_id":"event-error-003","analysis_id":"analysis-housing","sequence":3,"frame_version":0,"occurred_at":"2026-09-13T12:05:03Z","type":"stage_end","payload":{"stage":"data_discovery","outcome":"failed"}}
+{"event_id":"event-error-004","analysis_id":"analysis-housing","sequence":4,"frame_version":0,"occurred_at":"2026-09-13T12:05:04Z","type":"completion","payload":{"outcome":"failed"}}
