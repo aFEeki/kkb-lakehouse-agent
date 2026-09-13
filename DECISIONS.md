@@ -7,7 +7,7 @@ the reasoning in [PLAN.md](PLAN.md) rather than restating it here.
 |---|---|---|---|
 | 1 | Time budget per person | Today | **dropped** — no fixed budget |
 | 2 | Who owns the data layer | Today | **contested** — see below |
-| 3 | BDDK scope | Today | **settled** — monthly only |
+| 3 | BDDK scope | Today | **revised 13 Sep** — monthly first, weekly to follow |
 | 4 | Size of the data pool | Today | **settled** — ~250, chosen backwards from a question list |
 | 5 | Frontend framework | Today | **settled** — React / Next.js |
 | 16 | Neo4j | Today | **contested** — recommend skipping |
@@ -35,11 +35,53 @@ One ask: know roughly who is around on **Sat 12 and Sun 13 Sep**. The BDDK parsi
 de-cumulation gate both land that weekend, and those two days carry more risk than the rest
 of the week combined.
 
-### 3. BDDK scope — monthly bulletins only
+### 3. BDDK scope — monthly first, weekly to follow
 
-Weekly bulletins hold most of the parsing volume and the published demo scenario needs none
-of them. Add weekly only if Day 4 arrives on schedule. FinTürk province data is first on the
-cut list.
+**Revised 13 Sep after measuring the source. The original reasoning was wrong.**
+
+This was first decided as "monthly only," justified by weekly holding "most of the parsing
+volume." That assumed hundreds of Excel workbooks. Neither BDDK bulletin is Excel, so the
+cost was mispriced:
+
+| | Weekly | Monthly (acquired) |
+|---|---|---|
+| Format | server-rendered HTML | JSON endpoint |
+| Periods in range | ~287 | 66 |
+| Tables | 9 | 17 |
+| Requests (TL only) | ~2,583 | 1,122 |
+| Acquisition at 2s delay | **~90 min** | 40 min |
+
+Roughly twice what already ran unattended in an evening. **Volume is not a reason to exclude
+it.**
+
+A second original argument also failed. Weekly was said to introduce the
+week-straddling-month-boundary problem in frequency harmonisation. But 7 of the 22 ingested
+EVDS series are already weekly — including `TP.KTF12`, the housing loan rate turn 1 depends
+on. That problem is on the critical path regardless, so excluding weekly does not avoid it.
+
+**Decision: acquire weekly, after the three demo turns work end to end.**
+
+The brief names Haftalık Bülten as a required source, so excluding it is a real gap against
+stated requirements — and "we ran out of time" is a weak answer for ninety minutes of
+unattended download. Acquisition can run in the background while other work continues.
+
+Sequencing matters though: the three published turns are monthly and need none of this.
+Weekly must not displace them.
+
+**What acquiring it involves**, confirmed by probe:
+
+- `POST /BultenHaftalik/tr/Home/DonemDegistir` with `yil`, `donemId`, `para`
+- Requires a session cookie **and** a `__RequestVerificationToken` scraped from the page —
+  without the token the endpoint returns 500
+- 662 `donemId` values available, back to 2014; ~287 fall in our range
+- Data arrives as HTML tables, not JSON
+- Numeric cells are Turkish-formatted **text**: `Toplam Krediler (2+10)` → `12.694.338`
+- A `USD` currency option exists and would double the request count. TL only for a first pass
+
+That last point revives **SCRUM-17** (Turkish numeric parsing) for real, and SCRUM-16 in an
+HTML form. SCRUM-18 stays closed — neither source has sheets.
+
+FinTürk remains out of scope and is still first on the cut list.
 
 ### 4. Size of the data pool — ~250 series
 
