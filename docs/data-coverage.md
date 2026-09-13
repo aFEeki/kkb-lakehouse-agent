@@ -12,10 +12,13 @@ are gaps, not omissions.
 | Source | Status | Coverage |
 |---|---|---|
 | BDDK Aylık Bülten | **acquired** | 2021-01 → 2026-06, 17 tables, Sektör only |
+| BDDK Haftalık Bülten | **acquired** | 2021-01-08 → 2026-06-26, 286 weeks, 9 tables, TL |
 | TCMB EVDS | **first subset acquired** | 22 series, 2021-01 → 2026-06 |
-| BDDK Haftalık Bülten | **out of scope for v1** | see below |
-| BDDK FinTürk | **out of scope for v1** | see below |
+| BDDK FinTürk | **required, not started** | SCRUM-97 |
 | Live URLs | **not started** | on-demand, no pre-acquisition |
+
+All three BDDK sources are required by the organizers, who state the data
+*alınacaktır* for 2021-01 to 2026-06. FinTürk is the remaining gap.
 
 ---
 
@@ -83,20 +86,49 @@ approximated with sector totals.
 
 ---
 
-## BDDK Haftalık Bülten and FinTürk — out of scope for v1
+## BDDK Haftalık Bülten — acquired
 
-Recorded decision (DECISIONS.md #3): monthly only for the first pass. Weekly holds most of
-the parsing volume and the published demo scenario needs none of it. FinTürk is province-level
-and quarterly by nature.
+Fetched 2026-09-13 in a single 100-minute pass. **2,574 files, zero failures.**
 
-The brief names all three. This gap is a scope decision, not an oversight, and should be
-presented as such.
+| | |
+|---|---|
+| Periods | 286 weeks (2021-01-08 → 2026-06-26), no gaps |
+| Tables | 9 of 9, every period |
+| Currency | TL only (a USD option exists and would double the count) |
+| Sector scope | default only — a `taraf` dimension exists here too and is unfetched |
+| Raw size | 504 MB (39 MB gzipped) |
+| Location | `data/bronze/bddk/haftalik/TL/` (gitignored) |
+| Manifest | `data/bronze/bddk/manifest_haftalik.jsonl` |
 
-**If weekly is brought back into scope, note that it is a different shape from monthly.**
-The monthly bulletin is a JSON endpoint; the weekly page is a server-rendered HTML table
-driven by `yil` / `donemId` / `para` selects, with no JSON endpoint and no file download.
-Acquiring it means HTML table parsing, not Excel and not JSON — and numeric cells arrive as
-Turkish-formatted text, so `1.234,56` conversion would genuinely apply there.
+Tables: Krediler · Takipteki Alacaklar · Menkul Değerler · Mevduat · Diğer Bilanço
+Kalemleri · Bilanço Dışı İşlemler · Bankalarda Saklanan Menkul Değerler 1 and 2 ·
+Yabancı Para Pozisyonu
+
+### Shape differs from monthly, and it matters
+
+The monthly bulletin is a JSON endpoint. **Weekly is a stateful ASP.NET form flow serving
+HTML**, so the stored bronze artefacts are raw HTML pages rather than JSON payloads:
+
+- Every POST needs a fresh `__RequestVerificationToken`; without it the endpoint returns 500
+- Selection is session state — period must be set before iterating tables
+- Each response renders the same table at **three precisions** (0, 2 and 5 decimals). The
+  5-decimal variant is the one to parse
+- **Numeric cells are Turkish-formatted text**: `12.694.338,76219`. This is why SCRUM-17 is
+  real work for this source and was not needed for monthly
+- Row labels carry the same embedded row-number references as monthly
+  (`Toplam Krediler (2+10)`), so the SCRUM-96 identity normalisation applies here unchanged
+
+Size is the notable difference: 504 MB against monthly's 8 MB, because each page carries
+full site chrome. It compresses to 39 MB, which is still too large for casual sharing —
+re-running the crawler is the better distribution route for this source.
+
+## BDDK FinTürk — required, not started
+
+Tracked as SCRUM-97. Previously listed as first on the cut list; that was wrong. The
+organizers name it alongside the two bulletins.
+
+Note its natural frequency is **quarterly**, and it adds a province (`il`) dimension the
+catalog does not yet model.
 
 ---
 
