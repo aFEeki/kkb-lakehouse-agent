@@ -39,6 +39,25 @@ from kkb_agent.transform.haftalik_html import extract as extract_weekly
 _LABEL = 2
 _FIRST_VALUE = 4
 
+# BDDK's ddlTaraf codes -> the bank-group scope they select. The catalog stores the name
+# rather than the code: "10001" tells a reader nothing and embeds as noise, "Sektör" is
+# what the question actually asks for.
+#
+# The groups form three partitions of the sector, each of which must sum back to its
+# parent. scripts/check_taraf_partitions.py asserts exactly that.
+TARAF_SCOPE: dict[int, str] = {
+    10001: "Sektör",
+    10002: "Mevduat",
+    10003: "Katılım",
+    10004: "Kalkınma ve Yatırım",
+    10005: "Yerli Özel",
+    10006: "Kamu",
+    10007: "Yabancı",
+    10008: "Mevduat-Yerli Özel",
+    10009: "Mevduat-Kamu",
+    10010: "Mevduat-Yabancı",
+}
+
 # FinTürk tables are quarterly province data; all are balance-sheet positions except
 # the ratio and branch-count tables.
 FINTURK_STATEMENT: dict[int, StatementKind] = {
@@ -90,10 +109,38 @@ def _caption_unit(caption: str) -> str:
     return caption.split("(")[-1].split(")")[0].strip()
 
 
+_SCOPE = 0  # BDDK repeats the bank-group name in every row's first cell
+
+
+def scope_matches(rows: list[dict], taraf: int) -> bool:
+    """Whether the payload states the bank-group scope we requested.
+
+    The report viewer takes taraf as a form parameter; nothing in the response format
+    guarantees it honoured it. Since it names the scope back to us in every row, check.
+    An unrecognised taraf code passes - we have no expectation to compare against, and
+    inventing one would reject data for a scope BDDK added after this map was written.
+    """
+    expected = TARAF_SCOPE.get(taraf)
+    if expected is None or not rows:
+        return True
+    stated = str((rows[0].get("cell") or [""])[_SCOPE]).strip()
+    return stated == "" or stated == expected
+
+
 def iter_bddk_aylik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
-    """One (meta, series) pair per BDDK monthly row."""
-    frames: dict[tuple[int, str], dict] = {}
-    meta_bits: dict[tuple[int, str], dict] = {}
+    """One (meta, series) pair per BDDK monthly row, per bank-group scope.
+
+    taraf belongs in the key, not just the metadata. The same table and row label exists
+    for all ten scopes; keying without taraf lets ten bank groups overwrite each other
+    period by period and yields one series carrying the last-read group's figures under
+    the first-read group's label.
+
+    Each row states its own scope in cell 0, so the response is trusted over the request:
+    a file whose payload disagrees with the taraf we asked for is skipped rather than
+    filed under the wrong bank group.
+    """
+    frames: dict[tuple[int, int, str], dict] = {}
+    meta_bits: dict[tuple[int, int, str], dict] = {}
 
     for period_dir in sorted(p for p in bronze.iterdir() if p.is_dir()):
         y, m = (int(x) for x in period_dir.name.split("-"))
@@ -104,6 +151,8 @@ def iter_bddk_aylik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
             payload = json.loads(f.read_text(encoding="utf-8"))["Json"]
             rows = payload["data"]["rows"] if isinstance(payload.get("data"), dict) else []
             unit_raw = _caption_unit(payload.get("caption") or "")
+            if not scope_matches(rows, taraf):
+                continue
             for r in rows:
                 cell = r.get("cell") or []
                 if len(cell) <= _FIRST_VALUE:
@@ -111,27 +160,26 @@ def iter_bddk_aylik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 values = [c for c in cell[_FIRST_VALUE:] if isinstance(c, int | float)]
                 if not values:
                     continue
-                key = (table_no, normalise_label(cell[_LABEL]))
+                key = (table_no, taraf, normalise_label(cell[_LABEL]))
                 frames.setdefault(key, {})[ts] = float(values[-1])
                 meta_bits.setdefault(
                     key,
                     {
                         "raw_label": str(cell[_LABEL]).strip(),
-                        "taraf": taraf,
                         "unit_raw": unit_raw,
                         "row_index": cell[1] if len(cell) > 1 else None,
                     },
                 )
 
-    for (table_no, label), points in frames.items():
+    for (table_no, taraf, label), points in frames.items():
         s = pd.Series(points).sort_index()
-        bits = meta_bits[(table_no, label)]
+        bits = meta_bits[(table_no, taraf, label)]
         statement = BDDK_AYLIK_STATEMENT.get(table_no)
         ev = classify(s)
         mode, why = resolve_by_statement(table_no, label, ev.mode)
         unit_norm, scale = normalise_unit(bits["unit_raw"])
         measure = _measure_from(statement, bits["unit_raw"])
-        ident = identify("bddk_aylik", table_no, bits["taraf"], bits["raw_label"])
+        ident = identify("bddk_aylik", table_no, taraf, bits["raw_label"])
 
         yield (
             SeriesMeta(
@@ -142,7 +190,7 @@ def iter_bddk_aylik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 raw_label=bits["raw_label"],
                 measure_type=measure,
                 statement_kind=statement,
-                sector_scope=str(bits["taraf"]),
+                sector_scope=TARAF_SCOPE.get(taraf, str(taraf)),
                 currency_basis="Toplam",
                 unit_raw=bits["unit_raw"],
                 unit_normalized=unit_norm,
@@ -179,6 +227,10 @@ def iter_bddk_haftalik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
 
     The page header states its own period, so it is trusted over the directory name -
     a file whose header disagrees is skipped rather than filed under the wrong week.
+
+    The currency directory is part of the key for the same reason taraf is in the monthly
+    key. Only one currency is acquired today, so leaving it out would not corrupt anything
+    yet - which is precisely why it would go unnoticed until it did.
     """
     frames: dict[tuple, dict] = {}
     meta_bits: dict[tuple, dict] = {}
@@ -196,7 +248,7 @@ def iter_bddk_haftalik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                     for col, value in zip(parsed.columns, values, strict=False):
                         if value is None:
                             continue
-                        key = (table_id, norm, col)
+                        key = (currency_dir.name, table_id, norm, col)
                         frames.setdefault(key, {})[ts] = float(value)
                         meta_bits.setdefault(
                             key,
@@ -204,13 +256,12 @@ def iter_bddk_haftalik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                                 "raw_label": label,
                                 "unit_raw": parsed.unit_raw,
                                 "table_name": parsed.table_name,
-                                "currency": currency_dir.name,
                             },
                         )
 
-    for (table_id, label, col), points in frames.items():
+    for (currency, table_id, label, col), points in frames.items():
         s = pd.Series(points).sort_index()
-        bits = meta_bits[(table_id, label, col)]
+        bits = meta_bits[(currency, table_id, label, col)]
         statement = HAFTALIK_STATEMENT.get(table_id, StatementKind.BALANCE_SHEET)
         mode, why = resolve_by_statement(
             table_id, label, CumulativeMode.AMBIGUOUS, statements=HAFTALIK_STATEMENT
@@ -220,7 +271,7 @@ def iter_bddk_haftalik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
         slug = normalise_label(f"{label} {col}").casefold().replace(" ", "_")
         yield (
             SeriesMeta(
-                series_id=f"bddk_haftalik.t{table_id}.{slug}"[:200],
+                series_id=f"bddk_haftalik.{currency}.t{table_id}.{slug}"[:200],
                 source=Source.BDDK_HAFTALIK,
                 source_ref=f"tablo{table_id}#{col}",
                 name_tr=f"{bits['table_name']} - {label}",
