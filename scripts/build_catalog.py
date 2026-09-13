@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from kkb_agent.catalog.build import (  # noqa: E402
     iter_bddk_aylik,
     iter_bddk_finturk,
+    iter_bddk_haftalik,
     iter_evds,
     to_frames,
 )
@@ -62,6 +63,13 @@ def main() -> int:
     else:
         print("BDDK aylık   : not acquired")
 
+    if (BRONZE / "haftalik").exists():
+        got = list(iter_bddk_haftalik(BRONZE / "haftalik"))
+        print(f"BDDK haftalık: {len(got):>6} series")
+        pairs += got
+    else:
+        print("BDDK haftalık: not acquired")
+
     if (BRONZE / "finturk").exists():
         got = list(iter_bddk_finturk(BRONZE / "finturk"))
         print(f"BDDK fintürk : {len(got):>6} series")
@@ -75,8 +83,6 @@ def main() -> int:
         pairs += got
     else:
         print("EVDS         : not ingested")
-
-    print("BDDK haftalık: skipped - HTML, needs the table extractor (SCRUM-17 follow-up)")
 
     if not pairs:
         print("\nNothing to build. Acquire data first.")
