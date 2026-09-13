@@ -1,0 +1,244 @@
+{
+  "observed_at_utc": "2026-09-13T15:28:52.081176+00:00",
+  "probe_version": 1,
+  "limits": {
+    "max_redirects": 5,
+    "max_bytes": 5242880,
+    "max_pdf_pages": 25
+  },
+  "raw_response_bodies_retained": false,
+  "targets": {
+    "precious_metals": {
+      "final_url": "https://www.borsaistanbul.com/veriler/kiymetli-madenler-ve-kiymetli-taslar-piyasasi/piyasa-verileri",
+      "content_type": "text/html",
+      "byte_count": 79765,
+      "sha256": "14504bc85d081de3f7029ec782473870c9166060fd76940578a3ac0095698d72",
+      "redirect_count": 0,
+      "method": "SafeURLFetcher static HTTP fetch",
+      "normalized_text_length": 5731,
+      "gold_transactions_document": {
+        "label": "Altın İşlemleri",
+        "url": "https://www.borsaistanbul.com/dosyalar/kmtp/veriler/kmp_au.pdf",
+        "path": "/dosyalar/kmtp/veriler/kmp_au.pdf",
+        "query_parameters": []
+      },
+      "observed_document_family_paths": [
+        "/dosyalar/kmtp/veriler/kmp_au.pdf",
+        "/dosyalar/kmtp/veriler/kmp_ag.pdf",
+        "/dosyalar/kmtp/veriler/kmp_pl.pdf",
+        "/dosyalar/kmtp/veriler/kmp_pd.pdf"
+      ],
+      "observed_document_path_pattern": "/dosyalar/kmtp/veriler/kmp_<metal-code>.pdf",
+      "date_query_parameter_observed": false,
+      "relevant_links": [
+        {
+          "label": "Altın Fiyat",
+          "url": "https://www.borsaistanbul.com/endeksler/bist-kyd-endeksleri/altin-fiyat",
+          "path": "/endeksler/bist-kyd-endeksleri/altin-fiyat",
+          "query_parameters": []
+        },
+        {
+          "label": "Darphane Altın Sertifikası",
+          "url": "https://www.borsaistanbul.com/katilim-finans/darphane-altin-sertifikasi",
+          "path": "/katilim-finans/darphane-altin-sertifikasi",
+          "query_parameters": []
+        },
+        {
+          "label": "Altın İşlemleri",
+          "url": "https://www.borsaistanbul.com/dosyalar/kmtp/veriler/kmp_au.pdf",
+          "path": "/dosyalar/kmtp/veriler/kmp_au.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Gümüş İşlemleri",
+          "url": "https://www.borsaistanbul.com/dosyalar/kmtp/veriler/kmp_ag.pdf",
+          "path": "/dosyalar/kmtp/veriler/kmp_ag.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Platin İşlemleri",
+          "url": "https://www.borsaistanbul.com/dosyalar/kmtp/veriler/kmp_pl.pdf",
+          "path": "/dosyalar/kmtp/veriler/kmp_pl.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Paladyum İşlemleri",
+          "url": "https://www.borsaistanbul.com/dosyalar/kmtp/veriler/kmp_pd.pdf",
+          "path": "/dosyalar/kmtp/veriler/kmp_pd.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "2000-2026",
+          "url": "https://www.borsaistanbul.com/files/kmo.pdf",
+          "path": "/files/kmo.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Elmas ve Kıymetli Taş Piyasası İşlemleri",
+          "url": "https://www.borsaistanbul.com/files/elmas-ve-kiymetli-tas-piyasasi-islemleri.pdf",
+          "path": "/files/elmas-ve-kiymetli-tas-piyasasi-islemleri.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Elmas ve Kıymetli Taş Piyasası İthalat İşlemleri",
+          "url": "https://www.borsaistanbul.com/files/elmas-ve-kiymetli-tas-piyasasi-ithalat-islemleri.pdf",
+          "path": "/files/elmas-ve-kiymetli-tas-piyasasi-ithalat-islemleri.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Elmas ve Kıymetli Taş Piyasası Kıymetli Eşya Bildirimleri",
+          "url": "https://www.borsaistanbul.com/files/elmas-ve-kiymetli-tas-piyasasi-kiymetli-esya-bildirimleri.pdf",
+          "path": "/files/elmas-ve-kiymetli-tas-piyasasi-kiymetli-esya-bildirimleri.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Altın İthalatı",
+          "url": "https://www.borsaistanbul.com/dosyalar/kmtp/veriler/ith_au.pdf",
+          "path": "/dosyalar/kmtp/veriler/ith_au.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Gümüş İthalatı",
+          "url": "https://www.borsaistanbul.com/dosyalar/kmtp/veriler/ith_ag.pdf",
+          "path": "/dosyalar/kmtp/veriler/ith_ag.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Platin İthalatı",
+          "url": "https://www.borsaistanbul.com/dosyalar/kmtp/veriler/ith_pl.pdf",
+          "path": "/dosyalar/kmtp/veriler/ith_pl.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Paladyum İthalatı",
+          "url": "https://www.borsaistanbul.com/dosyalar/kmtp/veriler/ith_pd.pdf",
+          "path": "/dosyalar/kmtp/veriler/ith_pd.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Cevher Üretim Bildirimleri",
+          "url": "https://www.borsaistanbul.com/files/cevher-uretim-bildirimleri.pdf",
+          "path": "/files/cevher-uretim-bildirimleri.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Ocak 2026 Raporu",
+          "url": "https://www.borsaistanbul.com/files/aylik-piyasa-raporu-ocak-2026.pdf",
+          "path": "/files/aylik-piyasa-raporu-ocak-2026.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Şubat 2026 Raporu",
+          "url": "https://www.borsaistanbul.com/files/aylik-piyasa-raporu-subat-2026.pdf",
+          "path": "/files/aylik-piyasa-raporu-subat-2026.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Mart 2026 Raporu",
+          "url": "https://www.borsaistanbul.com/files/aylik-piyasa-raporu-mart-2026.pdf",
+          "path": "/files/aylik-piyasa-raporu-mart-2026.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Nisan 2026 Raporu",
+          "url": "https://www.borsaistanbul.com/files/aylik-piyasa-raporu-nisan-2026.pdf",
+          "path": "/files/aylik-piyasa-raporu-nisan-2026.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Mayıs 2026 Raporu",
+          "url": "https://www.borsaistanbul.com/files/aylik-piyasa-raporu-mayis-2026.pdf",
+          "path": "/files/aylik-piyasa-raporu-mayis-2026.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Haziran 2026 Raporu",
+          "url": "https://www.borsaistanbul.com/files/aylik-piyasa-raporu-haziran-2026.pdf",
+          "path": "/files/aylik-piyasa-raporu-haziran-2026.pdf",
+          "query_parameters": []
+        },
+        {
+          "label": "Temmuz 2026 Raporu",
+          "url": "https://www.borsaistanbul.com/files/aylik-piyasa-raporu-temmuz-2026.pdf",
+          "path": "/files/aylik-piyasa-raporu-temmuz-2026.pdf",
+          "query_parameters": []
+        }
+      ],
+      "relevant_link_count_capped": 22
+    },
+    "xtumy_static": {
+      "final_url": "https://www.borsaistanbul.com/endeks/xtumy",
+      "content_type": "text/html",
+      "byte_count": 84829,
+      "sha256": "e08995dbff06ee4fc4cff86e55b1ef913bbad256d49df1b1f8764a201018f7f8",
+      "redirect_count": 0,
+      "method": "SafeURLFetcher static HTTP fetch",
+      "title": "BIST TUM-100 | Borsa İstanbul A.Ş.",
+      "normalized_text_length": 6014,
+      "normalized_text_sha256": "b1df69a8c94027f50c4b996d23174533c962d617f355c0832f7ded3329b4f7bb",
+      "marker_counts": {
+        "xtumy": 2,
+        "bist 100": 0,
+        "bist tüm-100": 0,
+        "endeks": 57
+      },
+      "xtumy_contexts": [
+        "XTUMY",
+        "http://www.borsaistanbul.com/endeks/xtumy"
+      ],
+      "table_count": 3,
+      "table_row_counts": [
+        17,
+        1,
+        0
+      ],
+      "table_summaries": [
+        {
+          "row_count": 17,
+          "sample_rows": [
+            [
+              "Endeks Kodu",
+              "XTUMY"
+            ],
+            [
+              "Endeks Adı",
+              "BIST TUM-100"
+            ],
+            [
+              "ISIN Kodu",
+              "TRAIMKB01380"
+            ],
+            [
+              "Endeks Tipi",
+              "Piyasa Değeri Ağırlıklı, Ağırlık Sınırlamalı Olmayan, Fiyat"
+            ],
+            [
+              "Kıymetlere Uygulanan Ağırlık Sınırlaması (%)",
+              "-"
+            ]
+          ]
+        },
+        {
+          "row_count": 1,
+          "sample_rows": [
+            [
+              "",
+              "Güncel Endeks Değerleri",
+              "Önceki Kapanış"
+            ]
+          ]
+        },
+        {
+          "row_count": 0,
+          "sample_rows": []
+        }
+      ]
+    },
+    "xtumy_rendered": {
+      "available": false,
+      "method": "Playwright Chromium rendered DOM",
+      "error_type": "PlaywrightUnavailable",
+      "error": "Playwright is not installed in the active environment."
+    }
+  }
+}
