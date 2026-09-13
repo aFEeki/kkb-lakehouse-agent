@@ -14,11 +14,11 @@ are gaps, not omissions.
 | BDDK Aylık Bülten | **acquired** | 2021-01 → 2026-06, 17 tables, Sektör only |
 | BDDK Haftalık Bülten | **acquired** | 2021-01-08 → 2026-06-26, 286 weeks, 9 tables, TL |
 | TCMB EVDS | **first subset acquired** | 22 series, 2021-01 → 2026-06 |
-| BDDK FinTürk | **required, not started** | SCRUM-97 |
+| BDDK FinTürk | **acquired** | 2021-03 → 2026-06, 22 quarters, 7 tables, 82 provinces |
 | Live URLs | **not started** | on-demand, no pre-acquisition |
 
-All three BDDK sources are required by the organizers, who state the data
-*alınacaktır* for 2021-01 to 2026-06. FinTürk is the remaining gap.
+All three BDDK sources required by the organizers are now acquired. They state the
+data *alınacaktır* for 2021-01 to 2026-06.
 
 ---
 
@@ -122,13 +122,53 @@ Size is the notable difference: 504 MB against monthly's 8 MB, because each page
 full site chrome. It compresses to 39 MB, which is still too large for casual sharing —
 re-running the crawler is the better distribution route for this source.
 
-## BDDK FinTürk — required, not started
+## BDDK FinTürk — acquired
 
-Tracked as SCRUM-97. Previously listed as first on the cut list; that was wrong. The
-organizers name it alongside the two bulletins.
+Fetched 2026-09-13 in 7 minutes. **154 files, zero failures.**
 
-Note its natural frequency is **quarterly**, and it adds a province (`il`) dimension the
-catalog does not yet model.
+| | |
+|---|---|
+| Periods | 22 quarters (2021-03 → 2026-06) |
+| Tables | 7 of 7, every period |
+| Provinces | **82**, all in every file |
+| Bank groups | 7 (Sektör, Mevduat, Katılım, Kalkınma ve Yatırım, Kamu, Yerli Özel, Yabancı) |
+| Rows per file | 574 (82 provinces × 7 groups) |
+| Raw size | 10 MB |
+| Location | `data/bronze/bddk/finturk/` (gitignored) |
+| Manifest | `data/bronze/bddk/manifest_finturk.jsonl` |
+
+Tables carry their unit in the name: Krediler (Bin TL), Mevduat (Bin TL), Bireysel
+Bankacılık (Bin TL), Seçilmiş Sektörel Krediler (Bin TL), Oranlar (%), and two more.
+
+### Quarterly, and it must stay quarterly
+
+Periods are `2021-3`, `2021-6`, `2021-9`, `2021-12`. **Do not resample into months that do
+not exist.** The data contract already forbids producing unobserved periods as if
+observed; this is the source where that rule bites.
+
+### Cheap to acquire, because of two array parameters
+
+`POST /BultenFinturk/tr/Home/VeriGetir` takes `sehirList` and `tarafList` as arrays, and
+the city list accepts the sentinel `HEPSİ`, which returns all 82 provinces at once.
+Passing every bank group alongside collapses acquisition to one request per table-period:
+**154 calls rather than the ~12,000** a province-by-province loop would have made.
+
+### Province totals reconcile to roughly the national figure
+
+Summing the 82 provinces for Sektör, 2025-12, gives **23,714,596 milyon TL** against BDDK
+monthly's `Toplam Krediler` of **23,122,195** — a 2.56% gap, the same order as the
+BDDK↔EVDS offsets in SCRUM-94. FinTürk reports *Toplam Nakdi Krediler* while the monthly
+bulletin reports *Toplam Krediler*, so the two are not defined identically. The geography
+adding up this closely validates the acquisition; the exact definitional difference is
+follow-up, not a blocker.
+
+Distribution is plausible: İstanbul 34.2%, Ankara 13.3%, İzmir 5.4%.
+
+### The catalog does not yet model province
+
+`il` is a dimension the series catalog has no field for. Decide how it is represented
+before loading this into the catalog, or it will be flattened into series names and become
+unqueryable.
 
 ---
 
