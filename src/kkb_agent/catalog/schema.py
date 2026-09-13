@@ -75,13 +75,27 @@ DEFAULT_AGGREGATION: dict[MeasureType, AggregationRule] = {
 }
 
 # Unit string as published -> (normalised unit, multiplier to reach it).
+#
+# Not every published figure is money. BDDK's ratio and "other information" tables count
+# branches, staff and ATMs, express staff-per-branch in people, and give weighted average
+# maturities in days. Those units carry no scale factor, but they still have to be
+# recorded: a series whose unit we cannot state is a series we refuse to serve, so
+# omitting them is what kept 3,164 real series out of the catalog.
 UNIT_SCALE: dict[str, tuple[str, float]] = {
     "bin tl": ("TRY", 1_000.0),
     "milyon tl": ("TRY", 1_000_000.0),
     "milyar tl": ("TRY", 1_000_000_000.0),
     "tl": ("TRY", 1.0),
     "%": ("%", 1.0),
+    "adet": ("adet", 1.0),  # branches, banks, ATMs
+    "kişi": ("kişi", 1.0),  # people per branch, population per branch
+    "gün": ("gün", 1.0),  # weighted average maturity
 }
+
+# Units that mean "a number of things". A count is summable across provinces or bank
+# groups; a per-capita or per-branch figure in the same table is not, which is why the
+# unit alone cannot decide and MeasureType has to be set alongside it.
+COUNT_UNITS = frozenset({"adet"})
 
 
 @dataclass

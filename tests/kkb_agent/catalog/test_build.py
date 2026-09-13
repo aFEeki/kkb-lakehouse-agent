@@ -17,7 +17,16 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from kkb_agent.catalog.build import iter_bddk_aylik, iter_bddk_haftalik, scope_matches
+from kkb_agent.catalog.build import (
+    FINTURK_T06_COLUMN,
+    _label_unit,
+    _measure_from,
+    iter_bddk_aylik,
+    iter_bddk_haftalik,
+    scope_matches,
+)
+from kkb_agent.catalog.schema import MeasureType
+from kkb_agent.transform.cumulative import StatementKind
 
 SCOPES = {10001: "Sektör", 10002: "Mevduat", 10003: "Katılım"}
 
@@ -108,6 +117,84 @@ class TestScopeGuard:
         b = tmp_path / "aylik"
         write_month(b, "2021-01", 10002, 5_000, scope="Sektör")  # viewer served the wrong scope
         assert list(iter_bddk_aylik(b)) == []
+
+
+class TestLabelUnit:
+    """SCRUM-25 - table 15 "Rasyolar" is four units, and each row says which."""
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        [
+            ("Takipteki Alacaklar (Brüt) / Toplam Nakdi Krediler (%)", "%"),
+            ("Toplam Mevduat / Ortalama Toplam Personel Sayısı (Bin TL)", "Bin TL"),
+            ("Toplam Personel Sayısı / Toplam Şube Sayısı (Kişi)", "Kişi"),
+            ("Menkul Değerlerin Ağırlıklı Ortalama Vadesi (Gün)", "Gün"),
+        ],
+    )
+    def test_reads_the_declared_unit(self, label: str, expected: str):
+        assert _label_unit(label) == expected
+
+    @pytest.mark.parametrize(
+        "label",
+        [
+            "Risk Ağırlıklı Kalemler Toplamı (10+27+28)",  # a row-number reference
+            "Yurt Dışı Şubeler Mevduatı (Fon) / Toplam Mevduat (Fon)",  # a qualifier
+            "Banka Sayısı",  # no parenthesis at all
+        ],
+    )
+    def test_a_parenthesis_that_is_not_a_unit_yields_nothing(self, label: str):
+        """Labels end in parentheses all over this source. Only a known unit counts."""
+        assert _label_unit(label) == ""
+
+    def test_the_inner_parenthesis_is_not_mistaken_for_the_unit(self):
+        label = "Yüksek Montanlı (1 Milyon TL ve Üzeri) Mevduat / Toplam Mevduat (%)"
+        assert _label_unit(label) == "%"
+
+
+class TestMeasureFromUnit:
+    def test_a_count_is_a_count_even_under_a_ratio_table(self):
+        """BDDK files ATM and branch counts inside "Rasyolar"; the unit has to win."""
+        assert _measure_from(StatementKind.RATIO, "Adet") is MeasureType.COUNT
+
+    def test_a_ratio_table_beats_the_percent_shortcut(self):
+        """An NPL ratio takes the period end, not the mean of the months in it."""
+        assert _measure_from(StatementKind.RATIO, "%") is MeasureType.RATIO
+
+    def test_balance_sheet_in_lira_is_still_a_stock(self):
+        assert _measure_from(StatementKind.BALANCE_SHEET, "milyon TL") is MeasureType.STOCK
+
+    def test_nothing_determined_stays_unknown(self):
+        assert _measure_from(None, "") is MeasureType.UNKNOWN
+
+
+class TestFinturkTable6:
+    """The one FinTürk table whose unit is a property of the column, not the table."""
+
+    def test_every_column_is_accounted_for(self):
+        assert len(FINTURK_T06_COLUMN) == 6
+
+    def test_branch_counts_may_be_summed_across_provinces(self):
+        unit, measure = FINTURK_T06_COLUMN["Yurtiçi Şube Sayısı"]
+        assert (unit, measure) == ("Adet", MeasureType.COUNT)
+
+    @pytest.mark.parametrize(
+        "col",
+        [
+            "Şubeye Düşen Nüfus",
+            "Kişi Başı Nakdi Kredi",
+            "Kişi Başı Takipteki Alacak",
+            "Kişi Başı Tasarruf Mevduatı",
+            "Kişi Başı Toplam Mevduat",
+        ],
+    )
+    def test_per_capita_figures_are_ratios_so_they_cannot_be_summed(self, col: str):
+        """Adding per-capita lending across 81 provinces is meaningless, so mark it."""
+        assert FINTURK_T06_COLUMN[col][1] is MeasureType.RATIO
+
+    def test_per_capita_money_is_lira_not_thousand_lira(self):
+        """Verified against table 1: kişi başı x nüfus reproduces Nakdi Krediler to
+        within 0.02% across all 81 provinces. scripts/check_finturk_units.py re-runs it."""
+        assert FINTURK_T06_COLUMN["Kişi Başı Nakdi Kredi"][0] == "TL"
 
 
 class TestWeeklyCurrency:

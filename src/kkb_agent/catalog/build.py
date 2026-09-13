@@ -11,6 +11,7 @@ and EVDS (parquet).
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from datetime import date, datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ import pandas as pd
 
 from kkb_agent.catalog.identity import identify, normalise_label
 from kkb_agent.catalog.schema import (
+    COUNT_UNITS,
+    UNIT_SCALE,
     Frequency,
     MeasureType,
     SeriesMeta,
@@ -44,7 +47,7 @@ _FIRST_VALUE = 4
 # what the question actually asks for.
 #
 # The groups form three partitions of the sector, each of which must sum back to its
-# parent. scripts/check_taraf_partitions.py asserts exactly that.
+# parent - an independent check on the whole monthly pipeline (SCRUM-28).
 TARAF_SCOPE: dict[int, str] = {
     10001: "Sektör",
     10002: "Mevduat",
@@ -79,8 +82,22 @@ FINTURK_TABLE_UNIT: dict[int, str] = {
     3: "Bin TL",  # Bireysel Bankacılık (Bin TL)
     4: "Bin TL",  # Seçilmiş Sektörel Krediler (Bin TL)
     5: "%",  # Oranlar (%)
-    6: "",  # Şubeler (Adet) ve Nüfusa Göre Dağılım (TL) - mixed, per column
+    6: "",  # Şubeler (Adet) ve Nüfusa Göre Dağılım (TL) - mixed, see below
     7: "Bin TL",  # Altın Kredileri ve Altın Mevduatı (Bin TL)
+}
+
+# Table 6 is the one FinTürk table whose unit is not a property of the table. Its own
+# dropdown label says "(TL)", but only four of its six columns are money and one counts
+# branches. The measure type is carried here too, because it is what stops a per-capita
+# figure being summed across 81 provinces - a branch count may be summed, a per-capita
+# amount may not, and both live in this table.
+FINTURK_T06_COLUMN: dict[str, tuple[str, MeasureType]] = {
+    "Yurtiçi Şube Sayısı": ("Adet", MeasureType.COUNT),
+    "Şubeye Düşen Nüfus": ("Kişi", MeasureType.RATIO),
+    "Kişi Başı Nakdi Kredi": ("TL", MeasureType.RATIO),
+    "Kişi Başı Takipteki Alacak": ("TL", MeasureType.RATIO),
+    "Kişi Başı Tasarruf Mevduatı": ("TL", MeasureType.RATIO),
+    "Kişi Başı Toplam Mevduat": ("TL", MeasureType.RATIO),
 }
 
 
@@ -90,15 +107,21 @@ def _measure_from(statement: StatementKind | None, unit_raw: str) -> MeasureType
     Deliberately conservative: anything not clearly determined stays UNKNOWN, and an
     UNKNOWN series is not servable. Guessing here is how a balance gets presented as
     new lending.
+
+    A count is decided by its unit before the statement is consulted, because BDDK files
+    branch, bank and ATM counts under "Rasyolar" alongside genuine ratios. Reading the
+    statement first would label 10,569 branches a ratio.
     """
+    if unit_raw.strip().casefold() in COUNT_UNITS:
+        return MeasureType.COUNT
+    if statement is StatementKind.RATIO:
+        return MeasureType.RATIO
     if unit_raw.strip() == "%":
         return MeasureType.RATE
     if statement is StatementKind.INCOME_STATEMENT:
         return MeasureType.FLOW
     if statement in (StatementKind.BALANCE_SHEET, StatementKind.OFF_BALANCE_SHEET):
         return MeasureType.STOCK
-    if statement is StatementKind.RATIO:
-        return MeasureType.RATIO
     return MeasureType.UNKNOWN
 
 
@@ -107,6 +130,35 @@ def _caption_unit(caption: str) -> str:
     if "(" not in caption:
         return ""
     return caption.split("(")[-1].split(")")[0].strip()
+
+
+# Monthly tables whose caption states no unit and whose rows do not either. Read off the
+# published table, not inferred: table 16 counts things, table 17 is entirely ratios
+# whose values run 1-5 and are plainly percentages.
+AYLIK_TABLE_UNIT: dict[int, str] = {
+    16: "Adet",  # Diğer Bilgiler - banka, şube, ATM, personel sayıları
+    17: "%",  # Yurt Dışı Şube Rasyoları - labels carry no (%) but the values are
+}
+
+_TRAILING_PAREN = re.compile(r"\(([^()]*)\)\s*$")
+
+
+def _label_unit(label: str) -> str:
+    """Read a unit out of a row label's trailing parenthesis, if it is one.
+
+    Table 15 "Rasyolar" is not one unit. Of its 32 rows, 24 are (%), five are (Bin TL)
+    per-employee and per-branch amounts, one is (Kişi) and two are (Gün) maturities. The
+    table cannot tell us which; each row says so itself.
+
+    Only a recognised unit counts. Labels end in parentheses all over this source -
+    "Risk Ağırlıklı Kalemler Toplamı (10+27+28)", "Toplam Mevduat (Fon)" - and treating
+    those as units would be worse than having none.
+    """
+    m = _TRAILING_PAREN.search(label or "")
+    if not m:
+        return ""
+    candidate = m.group(1).strip()
+    return candidate if candidate.casefold() in UNIT_SCALE else ""
 
 
 _SCOPE = 0  # BDDK repeats the bank-group name in every row's first cell
@@ -160,13 +212,19 @@ def iter_bddk_aylik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 values = [c for c in cell[_FIRST_VALUE:] if isinstance(c, int | float)]
                 if not values:
                     continue
+                raw_label = str(cell[_LABEL]).strip()
                 key = (table_no, taraf, normalise_label(cell[_LABEL]))
                 frames.setdefault(key, {})[ts] = float(values[-1])
                 meta_bits.setdefault(
                     key,
                     {
-                        "raw_label": str(cell[_LABEL]).strip(),
-                        "unit_raw": unit_raw,
+                        "raw_label": raw_label,
+                        # Caption first: for tables 1-14 it states the unit for the whole
+                        # table. Where it is silent the row says so itself, and where
+                        # neither does, the table is one we have read off the source.
+                        "unit_raw": (
+                            unit_raw or _label_unit(raw_label) or AYLIK_TABLE_UNIT.get(table_no, "")
+                        ),
                         "row_index": cell[1] if len(cell) > 1 else None,
                     },
                 )
@@ -329,8 +387,10 @@ def iter_bddk_finturk(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
         mode, why = resolve_by_statement(
             table_no, col, CumulativeMode.AMBIGUOUS, statements=FINTURK_STATEMENT
         )
-        unit_norm, scale = normalise_unit(bits["unit_raw"])
-        measure = _measure_from(statement, bits["unit_raw"])
+        # Table 6 carries its unit per column rather than per table.
+        column_unit, column_measure = FINTURK_T06_COLUMN.get(col, ("", None))
+        unit_norm, scale = normalise_unit(column_unit or bits["unit_raw"])
+        measure = column_measure or _measure_from(statement, bits["unit_raw"])
         slug = normalise_label(f"{col} {province} {group}").lower().replace(" ", "_")
         yield (
             SeriesMeta(
@@ -343,7 +403,7 @@ def iter_bddk_finturk(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 statement_kind=statement,
                 sector_scope=group,
                 province=None if province.upper() == "HEPSİ" else province,
-                unit_raw=bits["unit_raw"],
+                unit_raw=column_unit or bits["unit_raw"],
                 unit_normalized=unit_norm,
                 scale_factor=scale,
                 cumulative_mode=mode,
