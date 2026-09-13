@@ -31,6 +31,92 @@ class CumulativeMode(StrEnum):
     AMBIGUOUS = "ambiguous"  # patterns cannot separate; needs the source definition
 
 
+class StatementKind(StrEnum):
+    """Which financial statement a BDDK table represents.
+
+    This is the source definition the pattern checks cannot supply, and it settles the
+    ambiguous cases on accounting grounds rather than by eye:
+
+    An **income statement** measures activity over a period, so BDDK reports it
+    year-to-date and it resets each January.
+
+    A **balance sheet** measures a position at a moment. It never accumulates - a loan
+    balance is what is outstanding today, not the sum of every loan ever written.
+
+    **Off-balance-sheet** commitments are positions too: guarantees outstanding, not
+    guarantees ever issued.
+
+    **Ratios** inherit from whatever they are built on.
+    """
+
+    INCOME_STATEMENT = "income_statement"
+    BALANCE_SHEET = "balance_sheet"
+    OFF_BALANCE_SHEET = "off_balance_sheet"
+    RATIO = "ratio"
+
+
+# BDDK Aylık Bülten table -> statement kind. Derived from what each table reports.
+BDDK_AYLIK_STATEMENT: dict[int, StatementKind] = {
+    1: StatementKind.BALANCE_SHEET,  # Bilanço
+    2: StatementKind.INCOME_STATEMENT,  # Kar Zarar
+    3: StatementKind.BALANCE_SHEET,  # Krediler
+    4: StatementKind.BALANCE_SHEET,  # Tüketici Kredileri
+    5: StatementKind.BALANCE_SHEET,  # Sektörel Kredi Dağılımı
+    6: StatementKind.BALANCE_SHEET,  # KOBİ Kredileri
+    7: StatementKind.BALANCE_SHEET,  # Sendikasyon Seküritizasyon
+    8: StatementKind.BALANCE_SHEET,  # Menkul Kıymetler
+    9: StatementKind.BALANCE_SHEET,  # Mevduat Türler İtibarıyla
+    10: StatementKind.BALANCE_SHEET,  # Mevduat Vade İtibarıyla
+    11: StatementKind.BALANCE_SHEET,  # Likidite Durumu
+    12: StatementKind.BALANCE_SHEET,  # Sermaye Yeterliliği
+    13: StatementKind.BALANCE_SHEET,  # Yabancı Para Pozisyonu
+    14: StatementKind.OFF_BALANCE_SHEET,  # Bilanço Dışı İşlemler
+    15: StatementKind.RATIO,  # Rasyolar
+    16: StatementKind.RATIO,  # Diğer Bilgiler
+    17: StatementKind.RATIO,  # Yurt Dışı Şube Rasyoları
+}
+
+# Balance-sheet tables carrying a small number of income-statement lines. BDDK shows
+# period profit on the balance sheet, and it accumulates like the P&L it comes from.
+INCOME_LINES_ON_BALANCE_SHEET = {"dönem karı (zararı)", "dönem net karı (zararı)"}
+
+
+def resolve_by_statement(
+    table_no: int,
+    label: str,
+    pattern_mode: CumulativeMode,
+    *,
+    statements: dict[int, StatementKind] | None = None,
+) -> tuple[CumulativeMode, str]:
+    """Settle an ambiguous classification using the table's statement kind.
+
+    Returns (mode, reason). Only AMBIGUOUS results are resolved - a confident pattern
+    result is left alone, because the data disagreeing with the accounting is itself
+    information and should not be silently overwritten.
+    """
+    if pattern_mode is not CumulativeMode.AMBIGUOUS:
+        return pattern_mode, "settled by pattern; statement kind not consulted"
+
+    kind = (statements or BDDK_AYLIK_STATEMENT).get(table_no)
+    if kind is None:
+        return pattern_mode, f"no statement kind recorded for table {table_no}"
+
+    if label.strip().casefold() in INCOME_LINES_ON_BALANCE_SHEET:
+        return CumulativeMode.YTD, "income-statement line reported on the balance sheet"
+
+    if kind is StatementKind.INCOME_STATEMENT:
+        return CumulativeMode.YTD, (
+            "income statement: measures activity over a period, reported year-to-date "
+            "and reset each January"
+        )
+    if kind in (StatementKind.BALANCE_SHEET, StatementKind.OFF_BALANCE_SHEET):
+        return CumulativeMode.NONE, (
+            f"{kind.replace('_', ' ')}: a position at a point in time, which does not "
+            "accumulate - the balance outstanding, not the sum of everything ever written"
+        )
+    return CumulativeMode.NONE, "ratio of positions; not an accumulating quantity"
+
+
 @dataclass
 class Evidence:
     """Why a series was classified the way it was, so a reviewer can disagree."""
