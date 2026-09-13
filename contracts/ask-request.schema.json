@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "description": "Ask against exactly one client-observed analysis version.",
+  "properties": {
+    "analysis_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Analysis Id",
+      "type": "string"
+    },
+    "question": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Question",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 0,
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "analysis_id",
+    "version",
+    "question"
+  ],
+  "title": "AskRequest",
+  "type": "object"
+}
