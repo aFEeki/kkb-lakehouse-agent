@@ -82,8 +82,7 @@ def is_rate_limit(e: Exception) -> bool:
 def retry_after_of(e: Exception) -> str | None:
     resp = getattr(e, "response", None)
     if resp is not None:
-        for h in ("retry-after", "x-ratelimit-reset", "x-ratelimit-remaining",
-                  "x-ratelimit-limit"):
+        for h in ("retry-after", "x-ratelimit-reset", "x-ratelimit-remaining", "x-ratelimit-limit"):
             v = resp.headers.get(h) if hasattr(resp, "headers") else None
             if v:
                 return f"{h}={v}"
@@ -110,8 +109,10 @@ def phase_concurrency(client: OpenAI, levels: tuple[int, ...], budget: int) -> d
                     out.other_errors.append(f"{type(err).__name__}: {err}"[:120])
         results[n] = out
         med = f"{statistics.median(out.latencies):.2f}s" if out.latencies else "—"
-        print(f"    {n:>3} parallel: ok={out.ok:<3} 429={out.rate_limited:<3} "
-              f"other={len(out.other_errors):<2} median {med}")
+        print(
+            f"    {n:>3} parallel: ok={out.ok:<3} 429={out.rate_limited:<3} "
+            f"other={len(out.other_errors):<2} median {med}"
+        )
         if out.other_errors:
             print(f"        e.g. {out.other_errors[0]}")
         if out.rate_limited:
@@ -138,9 +139,11 @@ def phase_burst(client: OpenAI, count: int, budget: int) -> Outcome:
         elif is_rate_limit(err):
             out.rate_limited += 1
             out.retry_after = retry_after_of(err)
-            print(f"    -> 429 after {out.ok} successful requests "
-                  f"in {time.perf_counter()-t0:.1f}s "
-                  f"({out.ok/max(time.perf_counter()-t0, 1e-9)*60:.0f}/min)")
+            print(
+                f"    -> 429 after {out.ok} successful requests "
+                f"in {time.perf_counter() - t0:.1f}s "
+                f"({out.ok / max(time.perf_counter() - t0, 1e-9) * 60:.0f}/min)"
+            )
             if out.retry_after:
                 print(f"       header: {out.retry_after}")
             break
@@ -151,8 +154,10 @@ def phase_burst(client: OpenAI, count: int, budget: int) -> Outcome:
                 break
     elapsed = time.perf_counter() - t0
     if not out.rate_limited:
-        print(f"    no 429 in {out.ok} requests over {elapsed:.1f}s "
-              f"({out.ok/max(elapsed, 1e-9)*60:.0f}/min sustained)")
+        print(
+            f"    no 429 in {out.ok} requests over {elapsed:.1f}s "
+            f"({out.ok / max(elapsed, 1e-9) * 60:.0f}/min sustained)"
+        )
     return out
 
 
@@ -161,7 +166,8 @@ def phase_embeddings(client: OpenAI, batch: int) -> str:
     try:
         t0 = time.perf_counter()
         r = client.embeddings.create(
-            model=EMBED, input=[f"konut kredisi {i}" for i in range(batch)],
+            model=EMBED,
+            input=[f"konut kredisi {i}" for i in range(batch)],
             encoding_format="float",
         )
         dt = time.perf_counter() - t0
@@ -177,8 +183,12 @@ def main() -> int:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--burst", type=int, default=80, help="sequential burst size (default 80)")
-    ap.add_argument("--budget", type=int, default=GLOBAL_BUDGET,
-                    help=f"total request cap (default {GLOBAL_BUDGET})")
+    ap.add_argument(
+        "--budget",
+        type=int,
+        default=GLOBAL_BUDGET,
+        help=f"total request cap (default {GLOBAL_BUDGET})",
+    )
     a = ap.parse_args()
 
     print(f"MIA limits probe | {BASE_URL}\nmodel={CHAT}")
@@ -190,21 +200,25 @@ def main() -> int:
     burst = phase_burst(client, a.burst, a.budget)
     emb = phase_embeddings(client, 64)
 
-    max_conc = max((n for n, o in conc.items() if o.rate_limited == 0 and not o.other_errors),
-                   default=0)
+    max_conc = max(
+        (n for n, o in conc.items() if o.rate_limited == 0 and not o.other_errors), default=0
+    )
     limited_at = next((n for n, o in conc.items() if o.rate_limited), None)
 
     print(f"\n{'=' * 72}")
     print(f"requests spent: {spent}")
     if limited_at:
-        print(f"VERDICT: rate limited at {limited_at} concurrent requests; "
-              f"{max_conc} ran clean.")
+        print(f"VERDICT: rate limited at {limited_at} concurrent requests; {max_conc} ran clean.")
     elif burst.rate_limited:
-        print(f"VERDICT: no concurrency limit hit up to {max_conc}; "
-              f"sequential burst hit 429 after {burst.ok} requests.")
+        print(
+            f"VERDICT: no concurrency limit hit up to {max_conc}; "
+            f"sequential burst hit 429 after {burst.ok} requests."
+        )
     else:
-        print(f"VERDICT: no rate limit found within budget. {max_conc} concurrent and "
-              f"{burst.ok} back-to-back requests all succeeded.")
+        print(
+            f"VERDICT: no rate limit found within budget. {max_conc} concurrent and "
+            f"{burst.ok} back-to-back requests all succeeded."
+        )
         print("         A ceiling exists but sits above what this probe spent. Treat the")
         print("         measured numbers as a floor, not the limit.")
     print("=" * 72)
@@ -223,15 +237,17 @@ def main() -> int:
     for n, o in conc.items():
         med = f"{statistics.median(o.latencies):.2f}s" if o.latencies else "—"
         lines.append(f"| {n} concurrent | ok={o.ok}, 429={o.rate_limited}, median {med} |")
-    lines.append(
-        f"| sequential burst | {burst.ok} ok, {burst.rate_limited} rate limited |"
-    )
+    lines.append(f"| sequential burst | {burst.ok} ok, {burst.rate_limited} rate limited |")
     lines.append(f"| embedding batch of 64 | {emb} |")
     if burst.retry_after or any(o.retry_after for o in conc.values()):
         ra = burst.retry_after or next(o.retry_after for o in conc.values() if o.retry_after)
         lines.append(f"| rate-limit header | `{ra}` |")
-    lines += ["", "**Caveat:** absence of a 429 within this budget is not proof there is no "
-                  "limit. Treat these as a floor.", ""]
+    lines += [
+        "",
+        "**Caveat:** absence of a 429 within this budget is not proof there is no "
+        "limit. Treat these as a floor.",
+        "",
+    ]
 
     report = ROOT / "docs" / "mia-capabilities.md"
     if report.exists():
