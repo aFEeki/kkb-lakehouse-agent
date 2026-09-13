@@ -4,8 +4,8 @@ Bronze is the pinned input; the catalog is derived. Running this twice on the sa
 bronze produces the same catalog, which is what lets the snapshot be shared and everyone
 arrive at identical numbers.
 
-Sources handled here: BDDK Aylık (JSON), BDDK FinTürk (JSON), EVDS (parquet).
-BDDK Haftalık is HTML and needs the table extractor first - see SCRUM-17 follow-up.
+Sources handled here: BDDK Aylık (JSON), BDDK Haftalık (HTML), BDDK FinTürk (JSON)
+and EVDS (parquet).
 """
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ from kkb_agent.transform.cumulative import (
     classify,
     resolve_by_statement,
 )
+from kkb_agent.transform.haftalik_html import extract as extract_weekly
 
 # Column index in a BDDK Aylık row's `cell` array.
 _LABEL = 2
@@ -149,6 +150,90 @@ def iter_bddk_aylik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 cumulative_mode=mode,
                 cumulative_evidence=f"{ev.summary()[:180]} || {why}",
                 native_freq=Frequency.MONTHLY,
+                aggregation_rule=default_aggregation(measure),
+                coverage_start=s.index.min().date(),
+                coverage_end=s.index.max().date(),
+                observations=len(s),
+            ),
+            s,
+        )
+
+
+# Weekly table id -> statement kind. Same accounting rule as monthly: positions do not
+# accumulate, and the weekly bulletin publishes only positions.
+HAFTALIK_STATEMENT: dict[int, StatementKind] = {
+    289: StatementKind.BALANCE_SHEET,  # Krediler
+    290: StatementKind.BALANCE_SHEET,  # Takipteki Alacaklar
+    291: StatementKind.BALANCE_SHEET,  # Menkul Değerler
+    292: StatementKind.BALANCE_SHEET,  # Mevduat
+    293: StatementKind.BALANCE_SHEET,  # Diğer Bilanço Kalemleri
+    294: StatementKind.OFF_BALANCE_SHEET,  # Bilanço Dışı İşlemler
+    295: StatementKind.BALANCE_SHEET,  # Bankalarda Saklanan Menkul Değerler - 1
+    296: StatementKind.BALANCE_SHEET,  # Bankalarda Saklanan Menkul Değerler - 2
+    297: StatementKind.BALANCE_SHEET,  # Yabancı Para Pozisyonu
+}
+
+
+def iter_bddk_haftalik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
+    """One series per (table, row label, value column) in the weekly bulletin.
+
+    The page header states its own period, so it is trusted over the directory name -
+    a file whose header disagrees is skipped rather than filed under the wrong week.
+    """
+    frames: dict[tuple, dict] = {}
+    meta_bits: dict[tuple, dict] = {}
+
+    for currency_dir in sorted(p for p in bronze.iterdir() if p.is_dir()):
+        for period_dir in sorted(p for p in currency_dir.iterdir() if p.is_dir()):
+            for f in sorted(period_dir.glob("tablo*.html")):
+                table_id = int(f.stem.replace("tablo", ""))
+                parsed = extract_weekly(f.read_text(encoding="utf-8", errors="replace"))
+                if parsed is None or parsed.period is None or not len(parsed):
+                    continue
+                ts = pd.Timestamp(parsed.period)
+                for label, values in parsed.rows:
+                    norm = normalise_label(label)
+                    for col, value in zip(parsed.columns, values, strict=False):
+                        if value is None:
+                            continue
+                        key = (table_id, norm, col)
+                        frames.setdefault(key, {})[ts] = float(value)
+                        meta_bits.setdefault(
+                            key,
+                            {
+                                "raw_label": label,
+                                "unit_raw": parsed.unit_raw,
+                                "table_name": parsed.table_name,
+                                "currency": currency_dir.name,
+                            },
+                        )
+
+    for (table_id, label, col), points in frames.items():
+        s = pd.Series(points).sort_index()
+        bits = meta_bits[(table_id, label, col)]
+        statement = HAFTALIK_STATEMENT.get(table_id, StatementKind.BALANCE_SHEET)
+        mode, why = resolve_by_statement(
+            table_id, label, CumulativeMode.AMBIGUOUS, statements=HAFTALIK_STATEMENT
+        )
+        unit_norm, scale = normalise_unit(bits["unit_raw"])
+        measure = _measure_from(statement, bits["unit_raw"])
+        slug = normalise_label(f"{label} {col}").casefold().replace(" ", "_")
+        yield (
+            SeriesMeta(
+                series_id=f"bddk_haftalik.t{table_id}.{slug}"[:200],
+                source=Source.BDDK_HAFTALIK,
+                source_ref=f"tablo{table_id}#{col}",
+                name_tr=f"{bits['table_name']} - {label}",
+                raw_label=bits["raw_label"],
+                measure_type=measure,
+                statement_kind=statement,
+                currency_basis=col,
+                unit_raw=bits["unit_raw"],
+                unit_normalized=unit_norm,
+                scale_factor=scale,
+                cumulative_mode=mode,
+                cumulative_evidence=why,
+                native_freq=Frequency.WEEKLY,
                 aggregation_rule=default_aggregation(measure),
                 coverage_start=s.index.min().date(),
                 coverage_end=s.index.max().date(),
