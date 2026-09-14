@@ -268,8 +268,27 @@ Series end on different dates near June 2026 because publication lags differ.
 
 - **Options:** truncate to common end · show gaps · nowcast
 - **Recommend:** truncate with a visible notice. Never interpolate silently.
-- **Decision:**
-- **Owner:**
+- **Decision:** truncate to the common end, name what forced it, never nowcast.
+  Implemented in `catalog/align.py` (SCRUM-30).
+
+  The shared axis runs to the **earliest** end among the requested series. A table built
+  to the longest one has a final row where most columns are blank and one is not, and a
+  reader takes that row as a comparison when it isn't one.
+
+  The notice names the series that forced the cut, and is **empty when nothing was given
+  up** — an unconditional notice trains people to ignore it, which costs us the one time
+  it matters.
+
+  `truncate_to_common_end=False` exists for a single-series view, where there is no
+  comparison to mislead.
+
+  Two things that fall out of the same rule. A period with no underlying observation is
+  `None`, never a number: `sum` returns `0.0` for an empty bucket and nothing downstream
+  can tell that from an observed zero (invariant I7). And a series is never expanded into
+  a finer frequency — quarterly FinTürk served monthly would invent two observations per
+  quarter — so `align()` raises rather than dropping the column, because a table quietly
+  missing the column that answers the question is worse than an error.
+- **Owner:** Alp
 
 ### 12. Snapshot or live
 
