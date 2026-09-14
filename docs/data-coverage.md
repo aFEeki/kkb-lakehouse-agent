@@ -28,7 +28,7 @@ data *alınacaktır* for 2021-01 to 2026-06.
 |---|---|
 | Series | **47,015** |
 | Observations | **1,330,275** |
-| Unservable | **1** (`TP.KKM.K4`, no published unit) |
+| Unservable | **0** |
 
 | Source | Series |
 |---|---|
@@ -237,10 +237,19 @@ argued with rather than taken on trust.
 | Ingested | 250 of 250, zero failures |
 | Full EVDS catalog | **no** — `is_full_evds_catalog: false` |
 
-**The unit is on the datagroup, not the series.** `BIRIMI` is a datagroup field, which is
-why every non-rate series ingested before the walk had an empty unit and was refused by
-`is_usable()`. 164 of 678 groups publish no unit at all, and a handful name two
-possibilities (`Yüzde, TL`); those are excluded rather than resolved by a coin flip.
+**The unit is usually on the datagroup, not the series.** `BIRIMI` is a datagroup field,
+which is why every non-rate series ingested before the walk had an empty unit and was
+refused by `is_usable()`.
+
+164 of 678 groups publish no `BIRIMI` at all — but where the group is silent the series
+often states the unit itself, in a trailing parenthesis: `2. TL KKM – Toplam (milyar TL)`.
+That covers **1,019 series** whose unit is published and was being discarded because the
+lookup only ever asked the datagroup. Only a *recognised* unit is accepted from a name:
+EVDS ends 12,185 series names with `(Arşiv)`, and others with `(Stok)` or `(Tutar)`.
+
+A handful of groups name two possibilities (`Yüzde, TL`, `bin TL veya yüzde`). Those stay
+excluded rather than resolved by a coin flip — the group genuinely cannot say which
+applies to which series inside it.
 
 ### All three demo-scenario series are present
 
@@ -288,11 +297,6 @@ DECISIONS #10.
 **The housing loan interest rate is weekly; the demo table is monthly.** Turn 1 needs a
 frequency conversion, and because it is a rate the aggregation rule is mean or period-end,
 never a sum. See SCRUM-26.
-
-**One series carries no unit.** `TP.KKM.K4` — its datagroup publishes no `BIRIMI` and its
-note does not say. The magnitude is consistent with milyar TL, but consistent is not
-stated, so it is held without a unit and `is_usable()` refuses it. It is the only
-unservable series in the catalog.
 
 **Topics deliberately out of scope:** international statistics, balance of payments, and
 the CBRT's own balance sheet. Questions reaching into those cannot be answered, and that

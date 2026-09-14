@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -40,7 +41,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from kkb_agent.catalog.schema import normalise_unit  # noqa: E402
+from kkb_agent.catalog.schema import UNIT_SCALE, normalise_unit  # noqa: E402
 
 INDEX = ROOT / "data" / "bronze" / "evds" / "metadata" / "index.json"
 CONFIG = ROOT / "config" / "evds-series.json"
@@ -105,9 +106,9 @@ MUST_INCLUDE: dict[str, str] = {
 #   TP.DK.*.S       the archived Kurlar group is silent, but the live one (bie_dkdovytl,
 #                   the same quantity) publishes "Türk lirası".
 #
-# TP.KKM.K4 is deliberately absent. bie_kkm publishes no BIRIMI and its note does not
-# say. The magnitude is consistent with milyar TL, but consistent is not stated, and a
-# unit guessed from magnitude is exactly what this catalog refuses to serve.
+# TP.KKM.K4 used to be listed here as unresolvable. It is not: bie_kkm publishes no
+# BIRIMI, but the series name ends "(milyar TL)" and its three siblings end
+# "(milyar ABD doları)". resolve_unit now reads that, so no override is needed.
 CARRIED_OVER_UNIT: dict[str, str] = {
     "TP.AB.B6": "milyon ABD doları",
     "TP.DK.USD.S": "Türk lirası",
@@ -160,21 +161,43 @@ def category_reason(topic: str) -> str | None:
     return None
 
 
+_TRAILING_PAREN = re.compile(r"\(([^()]*)\)\s*$")
+
+
 def resolve_unit(series: dict) -> tuple[str, str]:
     """The series' unit and where it came from.
 
-    Normally the datagroup's BIRIMI. 164 of 678 groups leave it blank, and for one
-    recognisable case the series name settles it anyway: a "... Endeksi" is an index
-    whatever the group forgot to say. Everything else stays blank and gets rejected,
-    because a unit guessed from prose is how a plausible wrong number reaches a chart.
+    Normally the datagroup's BIRIMI. 164 of 678 groups leave it blank - but where the
+    group is silent the series often says so itself, in a trailing parenthesis:
 
-    The source is returned so the config records which series were resolved this way.
+        2. TL KKM - Toplam (milyar TL)
+        1. DDKKM - Toplam (milyar ABD doları)
+
+    That is 1,019 series whose unit is published and was being discarded, because the
+    lookup only ever asked the datagroup. Same principle as _label_unit for the BDDK
+    monthly rows: the more specific statement wins.
+
+    Only a *recognised* unit counts, which is what makes this safe. EVDS ends series
+    names in parentheses constantly - 12,185 of them say "(Arşiv)", others "(Stok)",
+    "(Tutar)", "(24D2)" - and treating those as units would be far worse than having none.
+
+    A "... Endeksi" is an index whatever the group forgot to say; that stays as a last
+    resort. Everything else keeps an empty unit and gets rejected, because a unit guessed
+    from prose is how a plausible wrong number reaches a chart.
+
+    The source is returned so the config records how each unit was established.
     """
     published = (series.get("unit") or "").strip()
     if published:
         return published, "datagroup"
-    if "endeks" in (series.get("name") or "").casefold():
-        return "Endeks", "series name"
+
+    name = series.get("name") or ""
+    m = _TRAILING_PAREN.search(name)
+    if m and m.group(1).strip().casefold() in UNIT_SCALE:
+        return m.group(1).strip(), "series name"
+
+    if "endeks" in name.casefold():
+        return "Endeks", "series name (endeks)"
     return "", ""
 
 
@@ -314,13 +337,19 @@ def main() -> int:
         print(f"   {n:>4}  {unit}")
 
     # Anything kept but absent from the walk still needs an entry, taken from the old config.
+    # A carried-over series was rejected by the topic or coverage filter, which happens
+    # before the unit is ever looked at - so its unit still has to be resolved here, from
+    # the same metadata, rather than being left blank by default.
+    indexed_by_code = {s["code"]: s for s in index["series"] if s.get("code")}
     old_by_code = {s["code"]: s for s in existing["series"]}
     for code in missing:
         entry = dict(old_by_code[code])
         if not entry.get("unit"):
-            unit = CARRIED_OVER_UNIT.get(code, "")
+            unit, source = resolve_unit(indexed_by_code.get(code, {}))
+            if not unit:
+                unit, source = CARRIED_OVER_UNIT.get(code, ""), "EVDS metadata, sibling datagroup"
             entry["unit"] = unit
-            entry["unit_source"] = "EVDS metadata, sibling datagroup" if unit else ""
+            entry["unit_source"] = source if unit else ""
         chosen.append(entry)
     chosen.sort(key=lambda c: c["code"])
 

@@ -412,7 +412,7 @@
       "name": "Tüketici Fiyat Endeksi (Genel)",
       "frequency": "monthly",
       "unit": "Endeks",
-      "unit_source": "series name",
+      "unit_source": "series name (endeks)",
       "datagroup": "bie_oktug2025",
       "category": "FİYAT ENDEKSLERİ"
     },
@@ -1125,8 +1125,7 @@
       "unit": "bin TL",
       "unit_source": "datagroup",
       "datagroup": "bie_finhestnks61014",
-      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER",
-      "note": "hanehalkı kredi akımı (net), üç aylık"
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
     },
     {
       "code": "TP.FINHESTNKS61014.ZP35",
@@ -1135,8 +1134,7 @@
       "unit": "bin TL",
       "unit_source": "datagroup",
       "datagroup": "bie_finhestnks61014",
-      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER",
-      "note": "hanehalkı kısa vadeli kredi akımı (net)"
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
     },
     {
       "code": "TP.FINHESTNKS61014.ZP36",
@@ -1145,8 +1143,7 @@
       "unit": "bin TL",
       "unit_source": "datagroup",
       "datagroup": "bie_finhestnks61014",
-      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER",
-      "note": "hanehalkı uzun vadeli kredi akımı (net) - konut ağırlıklı"
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
     },
     {
       "code": "TP.FINHESTNKS61015.ZP12",
@@ -1512,7 +1509,7 @@
       "code": "TP.GENENDEKS.T1",
       "name": "Genel Endeks (2003=100)",
       "frequency": "monthly",
-      "unit": "Endeks",
+      "unit": "2003=100",
       "unit_source": "series name",
       "datagroup": "bie_tukfiy2003",
       "category": "FİYAT ENDEKSLERİ"
@@ -1774,7 +1771,7 @@
       "name": "Konut Fiyat Endeksi (KFE)",
       "frequency": "monthly",
       "unit": "Endeks",
-      "unit_source": "series name",
+      "unit_source": "series name (endeks)",
       "datagroup": "bie_kfe",
       "category": "FİYAT ENDEKSLERİ"
     },
@@ -1782,8 +1779,8 @@
       "code": "TP.KKM.K4",
       "name": "TL kur korumalı mevduat toplamı",
       "frequency": "monthly",
-      "unit": "",
-      "unit_source": ""
+      "unit": "milyar TL",
+      "unit_source": "series name"
     },
     {
       "code": "TP.KKO2.IS.TOP",

@@ -101,6 +101,7 @@ UNIT_SCALE: dict[str, tuple[str, float]] = {
     "abd doları": ("USD", 1.0),
     "bin abd doları": ("USD", 1_000.0),
     "milyon abd doları": ("USD", 1_000_000.0),
+    "milyar abd doları": ("USD", 1_000_000_000.0),
     "bin kişi": ("kişi", 1_000.0),
     "endeks": ("endeks", 1.0),
     "2003=100": ("endeks", 1.0),
