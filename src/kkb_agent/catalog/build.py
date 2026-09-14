@@ -10,9 +10,11 @@ and EVDS (parquet).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
@@ -100,6 +102,63 @@ FINTURK_T06_COLUMN: dict[str, tuple[str, MeasureType]] = {
     "Kişi Başı Tasarruf Mevduatı": ("TL", MeasureType.RATIO),
     "Kişi Başı Toplam Mevduat": ("TL", MeasureType.RATIO),
 }
+
+
+@dataclass(frozen=True)
+class BronzeProvenance:
+    """What bronze state a source's series were built from.
+
+    Per source, not per series. A monthly series is assembled from 66 files, so a
+    file-level hash would not identify it; what a reader actually needs to know is which
+    acquisition produced this number and when it was fetched. The digest changes if any
+    file in that source changes, which is the property that matters for reproducibility.
+    """
+
+    source: str
+    digest: str
+    retrieved_at: datetime | None
+    files: int
+
+    @property
+    def short(self) -> str:
+        return f"{self.source}:{self.digest[:12]}"
+
+
+def bronze_provenance(manifest: Path, source: str) -> BronzeProvenance | None:
+    """Digest one acquisition manifest into a hash and a freshness stamp (I8).
+
+    The digest is over the sorted per-file sha256s, so it does not depend on the order
+    the crawler happened to write them - a re-crawl that fetches the same bytes in a
+    different order produces the same digest, which is what makes it usable as a
+    "same data" check rather than a "same run" one.
+    """
+    if not manifest.exists():
+        return None
+
+    hashes: list[str] = []
+    newest: datetime | None = None
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if sha := row.get("sha256"):
+            hashes.append(str(sha))
+        stamp = row.get("fetched_at")
+        if stamp:
+            try:
+                parsed = datetime.fromisoformat(str(stamp))
+            except ValueError:
+                continue
+            if newest is None or parsed > newest:
+                newest = parsed
+
+    if not hashes:
+        return None
+    digest = hashlib.sha256("".join(sorted(hashes)).encode()).hexdigest()
+    return BronzeProvenance(source=source, digest=digest, retrieved_at=newest, files=len(hashes))
 
 
 def _measure_from(statement: StatementKind | None, unit_raw: str) -> MeasureType:

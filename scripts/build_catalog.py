@@ -17,6 +17,7 @@ snapshot be shared and everyone arrive at identical numbers.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 import time
 from pathlib import Path
@@ -27,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from kkb_agent.catalog.build import (  # noqa: E402
+    bronze_provenance,
     iter_bddk_aylik,
     iter_bddk_finturk,
     iter_bddk_haftalik,
@@ -128,6 +130,44 @@ def main() -> int:
     if not pairs:
         print("\nNothing to build. Acquire data first.")
         return 1
+
+    # Freshness and reproducibility (SCRUM-29, I8). Stamped per source because a monthly
+    # series is assembled from 66 files: what identifies it is which acquisition produced
+    # it, not which single file.
+    print()
+    for source, manifest in [
+        ("bddk_aylik", BRONZE / "manifest_aylik.jsonl"),
+        ("bddk_haftalik", BRONZE / "manifest_haftalik.jsonl"),
+        ("bddk_finturk", BRONZE / "manifest_finturk.jsonl"),
+    ]:
+        prov = bronze_provenance(manifest, source)
+        if prov is None:
+            continue
+        stamped = 0
+        for meta, _ in pairs:
+            if str(meta.source) == source:
+                meta.source_hash = prov.digest
+                if meta.retrieved_at is None:
+                    meta.retrieved_at = prov.retrieved_at
+                stamped += 1
+        when = f"{prov.retrieved_at:%Y-%m-%d %H:%M}" if prov.retrieved_at else "unknown"
+        print(
+            f"provenance   : {prov.short}  {prov.files:>6,} files  "
+            f"fetched {when}  -> {stamped:,} series"
+        )
+
+    # EVDS has no per-file manifest: it is fetched series by series from an API, and the
+    # committed config is what pins the scope. Hashing that config is the equivalent
+    # statement - "these series, this selection" - and it changes whenever the selection
+    # does. retrieved_at is already on each series, from the parquet it was written to.
+    if EVDS_CONFIG.exists():
+        config_digest = hashlib.sha256(EVDS_CONFIG.read_bytes()).hexdigest()
+        stamped = 0
+        for meta, _ in pairs:
+            if str(meta.source) == "evds":
+                meta.source_hash = config_digest
+                stamped += 1
+        print(f"provenance   : evds:{config_digest[:12]}  {EVDS_CONFIG.name} -> {stamped:,} series")
 
     catalog, observations = to_frames(pairs)
     a.out.parent.mkdir(parents=True, exist_ok=True)
