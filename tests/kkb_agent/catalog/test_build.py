@@ -18,6 +18,7 @@ import pandas as pd
 import pytest
 
 from kkb_agent.catalog.build import (
+    AYLIK_ROW_UNIT,
     FINTURK_T06_COLUMN,
     _label_unit,
     _measure_from,
@@ -152,6 +153,58 @@ class TestLabelUnit:
         assert _label_unit(label) == "%"
 
 
+class TestRowUnitBeatsCaption:
+    """SCRUM-28 - a row that names its own unit is contradicting the caption on purpose.
+
+    Tables 12 and 13 carry capital-adequacy and FX-position ratios labelled "(YÜZDE)"
+    inside tables captioned "milyon TL". Reading the caption first made them stocks, and
+    the bank-group partition check caught it: a ratio does not add across bank groups.
+    """
+
+    def test_a_percent_row_inside_a_lira_table_is_a_ratio(self, tmp_path: Path):
+        payload = {
+            "Json": {
+                "caption": "Sermaye Yeterliliği (milyon TL), Dönem:2021/1",
+                "colNames": ["", "", "", "BasitFont", "Toplam"],
+                "data": {
+                    "rows": [
+                        {
+                            "cell": [
+                                "Sektör",
+                                1,
+                                "Sermaye Yeterliliği Standart Rasyosu ((5/7)*100) (YÜZDE)",
+                                "",
+                                18.5,
+                            ]
+                        },
+                        {"cell": ["Sektör", 2, "Özkaynak", "", 1_500_000]},
+                    ]
+                },
+            }
+        }
+        d = tmp_path / "aylik" / "2021-01"
+        d.mkdir(parents=True)
+        (d / "t12_taraf10001.json").write_text(json.dumps(payload, ensure_ascii=False), "utf-8")
+
+        got = {m.name_tr: m for m, _ in iter_bddk_aylik(tmp_path / "aylik")}
+        ratio = next(m for k, m in got.items() if "Rasyosu" in k)
+        amount = next(m for k, m in got.items() if "Özkaynak" in k)
+
+        assert ratio.unit_normalized == "%"
+        assert ratio.measure_type is MeasureType.RATE
+        # The caption still governs every row that does not override it.
+        assert amount.unit_raw == "milyon TL"
+        assert amount.measure_type is MeasureType.STOCK
+
+    def test_the_one_row_that_declares_nothing_is_listed_explicitly(self):
+        """'Likidite Yeterlilik Oranı' names no unit anywhere, so it needs an entry.
+
+        A rule instead of a list - "a label containing oran or / is a ratio" - would
+        misclassify 'TP Mevduat / Katılım Fonları' and 'Gemi/Tekne Yapımı'.
+        """
+        assert AYLIK_ROW_UNIT[(11, "Likidite Yeterlilik Oranı")] == ("%", MeasureType.RATIO)
+
+
 class TestMeasureFromUnit:
     def test_a_count_is_a_count_even_under_a_ratio_table(self):
         """BDDK files ATM and branch counts inside "Rasyolar"; the unit has to win."""
@@ -160,6 +213,12 @@ class TestMeasureFromUnit:
     def test_a_ratio_table_beats_the_percent_shortcut(self):
         """An NPL ratio takes the period end, not the mean of the months in it."""
         assert _measure_from(StatementKind.RATIO, "%") is MeasureType.RATIO
+
+    @pytest.mark.parametrize("published", ["%", "YÜZDE", "Yüzde", "yüzde"])
+    def test_percent_is_matched_after_normalising_not_as_written(self, published: str):
+        """BDDK writes percent four ways across its tables. Comparing the raw string to
+        "%" classified the capital-adequacy and FX-position ratios as balance amounts."""
+        assert _measure_from(StatementKind.BALANCE_SHEET, published) is MeasureType.RATE
 
     def test_balance_sheet_in_lira_is_still_a_stock(self):
         assert _measure_from(StatementKind.BALANCE_SHEET, "milyon TL") is MeasureType.STOCK
