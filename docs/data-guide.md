@@ -85,6 +85,16 @@ row. Every other series is a level.
 Two tables. `series_catalog` is one row per series — what it is. `series_observations` is
 long format, one row per series per period — the numbers.
 
+**There is no DuckDB to install.** It is an embedded library, already in `.venv`, with no
+server and no CLI on your PATH. `data/gold/lakehouse.duckdb` is the entire database — one
+file. Open it read-only:
+
+```python
+import duckdb
+con = duckdb.connect("data/gold/lakehouse.duckdb", read_only=True)
+con.execute(QUERY).fetchall()          # or .fetchdf() for a DataFrame
+```
+
 ```sql
 -- find something
 SELECT series_id, name_tr, sector_scope, unit_raw, measure_type, observations
