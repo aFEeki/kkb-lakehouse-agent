@@ -155,6 +155,10 @@ class SeriesMeta:
     coverage_start: date | None = None
     coverage_end: date | None = None
     observations: int = 0
+    # How many of those observations carry a figure. A row published as 0.0 every month
+    # is a real publication and a useless answer: 4,496 series are entirely zero or null,
+    # and `observations` alone makes them look as well-covered as any other.
+    nonzero_observations: int = 0
     retrieved_at: datetime | None = None
     source_hash: str = ""
     notes: str = ""
@@ -220,6 +224,7 @@ CREATE TABLE IF NOT EXISTS {CATALOG_TABLE} (
     coverage_start         DATE,
     coverage_end           DATE,
     observations           INTEGER DEFAULT 0,
+    nonzero_observations   INTEGER DEFAULT 0,
     retrieved_at           TIMESTAMP,
     source_hash            VARCHAR,
     notes                  VARCHAR
