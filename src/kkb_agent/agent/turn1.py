@@ -29,6 +29,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Protocol
 
 import duckdb
 
@@ -46,17 +47,60 @@ from kkb_agent.frame import (
     OperationType,
     Spine,
 )
+from kkb_agent.frame import (
+    Operation as FrameOperation,
+)
 
 Frame = AnalysisFrame
+
+
+class Planner(Protocol):
+    """What turn 1 needs from a planner. OperationPlanner satisfies it."""
+
+    def plan(
+        self,
+        user_intent: str,
+        resolved_context: str,
+        current_version: int,
+        series_references: list[str] | None = ...,
+        column_keys: list[str] | None = ...,
+        conventions: list[str] | None = ...,
+        base_dates: list[str] | None = ...,
+    ) -> tuple[FrameOperation, ...]: ...
+
+
+def resolved_context(available: dict[str, str], frame: Frame, spine_label: str) -> str:
+    """What the planner is allowed to know, written out for it.
+
+    Only series the resolver actually found, and only columns the frame actually has. The
+    planner emits operations against these names; anything it invents fails schema
+    validation or the executor, and both are better than a plausible reference to a series
+    that does not exist.
+    """
+    lines = ["Kullanılabilir seriler (series_reference -> önerilen column_key):"]
+    lines += [f"  {series_id} -> {key}" for key, series_id in available.items()]
+    lines.append(f"Mevcut sütunlar: {[c.key for c in frame.columns] or 'yok'}")
+    lines.append(f"Eksen: {spine_label}")
+    lines.append(f"Deflasyon sözleşmesi: {DEFLATION_CONVENTION}")
+    return "\n".join(lines)
+
 
 # The published window. Sixty months exactly, which is what makes "over five years" a
 # statement about the data rather than a rounding of it.
 WINDOW_START = date(2021, 1, 1)
 WINDOW_END = date(2025, 12, 1)
 
+# How many sampled plans to try before falling back. Two is not enough - the model is
+# right often enough that a third attempt converts most failures, and each is ~3s.
+PLAN_ATTEMPTS = 3
+
 BALANCE_KEY = "konut_kredisi_bakiye"
 RATE_KEY = "konut_kredisi_faizi"
 CPI_KEY = "tufe"
+
+# The published question, verbatim. It is what the planner is asked to plan for, so it
+# lives beside the series questions rather than only in the runner script.
+QUESTION = "Konut kredisi faizleri düştüğü halde kredi hacmi neden artmadı?"
 
 BALANCE_QUESTION = "konut kredisi"
 RATE_QUESTION = "konut kredisi faizi"
@@ -95,6 +139,8 @@ class TurnResult:
     evidence: tuple[Evidence, ...]
     caveats: tuple[str, ...] = ()
     elapsed_seconds: float = 0.0
+    planned_by: str = "script"
+    plan: tuple[str, ...] = ()
 
     @property
     def answer_tr(self) -> str:
@@ -158,6 +204,117 @@ def _deflate(executor, frame: Frame, column_key: str, base: date) -> Frame:
     )
 
 
+def _plan_summary(frame: Frame) -> tuple[str, ...]:
+    return tuple(f"{op.kind.value}({_op_target(op)})" for op in frame.operations)
+
+
+def _op_target(operation: FrameOperation) -> str:
+    parameters = operation.parameters
+    for attribute in ("series_reference", "column_key"):
+        value = getattr(parameters, attribute, None)
+        if value:
+            return str(value)
+    return ""
+
+
+def _unmet(frame: Frame) -> tuple[str, ...]:
+    """What the answer needs that this plan did not produce.
+
+    The model is free to plan, but the turn asserts its own preconditions. Sampled plans
+    vary - across six runs the same question produced 2, 3, 4 and 6 operations - and a
+    plan that skips the deflation still executes cleanly while quietly costing the
+    real-terms finding, which is the entire answer. Better to notice and re-plan than to
+    answer a smaller question than the one asked.
+    """
+    keys = {c.key for c in frame.columns}
+    missing = [key for key in (BALANCE_KEY, RATE_KEY) if key not in keys]
+    if not any("deflated_by" in key for key in keys):
+        missing.append("deflasyon")
+    return tuple(missing)
+
+
+def _scripted_plan(executor, frame: Frame, available: dict[str, str], base: date) -> Frame:
+    """The fixed plan. Runs when no planner is supplied, so the demo survives MIA being
+    unreachable and the tests never make a network call."""
+    for key, series_id in available.items():
+        frame = _add(executor, frame, series_id, key)
+    return _deflate(executor, frame, BALANCE_KEY, base)
+
+
+def _planned(
+    planner: Planner,
+    make_executor,
+    frame: Frame,
+    available: dict[str, str],
+    periods: tuple[date, ...],
+    question: str,
+) -> tuple[Frame, str, tuple[str, ...]]:
+    """Let the model choose the operations; execute only what validates.
+
+    Every operation still goes through the executor, so the frame contracts apply to a
+    model-emitted plan exactly as to a scripted one: the spine cannot move, existing
+    columns cannot change, and a reference to a series that does not exist is refused
+    rather than silently skipped.
+
+    If the plan is unusable, the scripted plan runs on a *fresh* frame and the result says
+    so. Fresh matters: a rejected plan may have applied some of its operations before
+    failing, and continuing from a half-built frame would produce a table nobody planned.
+    """
+    empty = Frame(frame_id=frame.frame_id, spine=frame.spine)
+    context = resolved_context(available, empty, str(empty.spine.label or "Dönem"))
+
+    attempts: list[str] = []
+    planned: tuple[str, ...] = ()
+
+    # More than one attempt because the plan is sampled, not computed: the same context
+    # yields a correct four-step plan on one call and a repeated add_column on the next.
+    # Each attempt is executed on a fresh frame, so a plan that fails halfway leaves
+    # nothing behind for the next one to build on.
+    for attempt in range(PLAN_ATTEMPTS):
+        try:
+            operations = planner.plan(
+                question,
+                context,
+                empty.version,
+                series_references=list(available.values()),
+                column_keys=list(available),
+                conventions=[DEFLATION_CONVENTION],
+                # The base period is a convention (DECISIONS #9), not a choice. Left free,
+                # the model picked an arbitrary date, which produced a correctly deflated
+                # column under a key the answer was not looking for.
+                base_dates=[periods[0].isoformat()],
+            )
+        except Exception as exc:  # a planner failure is recoverable; a wrong number is not
+            attempts.append(f"{attempt + 1}: planner failed ({type(exc).__name__})")
+            continue
+
+        planned = tuple(f"{op.kind.value}({_op_target(op)})" for op in operations)
+        # A fresh executor per attempt. Its snapshot history is stateful and keyed by
+        # (frame_id, version), so replaying version 1 with a different plan on the same
+        # executor is a lineage conflict - which is the guard that makes revert_to safe,
+        # and which a retry loop would otherwise trip on its second try.
+        executor = make_executor()
+        built = empty
+        try:
+            for operation in operations:
+                built = executor.execute(built, operation)
+        except Exception as exc:
+            attempts.append(f"{attempt + 1}: rejected ({type(exc).__name__})")
+            continue
+
+        missing = _unmet(built)
+        if missing:
+            attempts.append(f"{attempt + 1}: plan omitted {', '.join(missing)}")
+            continue
+        return built, "planner", planned
+
+    return (
+        _scripted_plan(make_executor(), empty, available, periods[0]),
+        "script (" + "; ".join(attempts) + ")",
+        planned,
+    )
+
+
 def find_decline_window(values: tuple[float | None, ...]) -> tuple[int, int] | None:
     """The span from a series' peak to its last observation, if it declined after peaking.
 
@@ -212,12 +369,30 @@ def build_turn1(
     *,
     start: date = WINDOW_START,
     end: date = WINDOW_END,
+    planner: Planner | None = None,
 ) -> TurnResult:
-    """Resolve, assemble and compute the answer to the first published question."""
+    """Resolve, assemble and compute the answer to the first published question.
+
+    With a `planner`, the model decides which operations to run and the executor validates
+    them; without one, a fixed plan runs. The split is deliberate and is the whole design:
+
+      the model decides WHAT to do      -> planner, schema-constrained
+      the code decides IF it is legal   -> executor, invariants, frame contracts
+      the code does the arithmetic      -> no number is ever generated
+
+    So a model that emits a nonsense operation fails validation rather than producing a
+    wrong number, and the fallback keeps the demo runnable when MIA is unreachable - with
+    `planned_by` saying which path ran, because "the agent did this" and "a script did
+    this" must never be indistinguishable in a demo.
+    """
     started = time.perf_counter()
     connection = duckdb.connect(str(catalog), read_only=True)
     source = CatalogSeriesSource(catalog)
-    executor = create_operation_executor(series_source=source)
+
+    def make_executor():
+        return create_operation_executor(series_source=source)
+
+    executor = make_executor()
 
     try:
         rows, concepts = _load_catalog(connection)
@@ -242,10 +417,19 @@ def build_turn1(
             raise RuntimeError(f"no {balance_id} observations between {start} and {end}")
 
         frame = Frame(frame_id="turn1", spine=Spine(values=periods, label="Dönem"))
-        frame = _add(executor, frame, balance_id, BALANCE_KEY)
-        frame = _add(executor, frame, rate_id, RATE_KEY)
-        frame = _add(executor, frame, CPI_SERIES_ID, CPI_KEY)
-        frame = _deflate(executor, frame, BALANCE_KEY, periods[0])
+        available = {
+            BALANCE_KEY: balance_id,
+            RATE_KEY: rate_id,
+            CPI_KEY: CPI_SERIES_ID,
+        }
+
+        if planner is None:
+            frame = _scripted_plan(executor, frame, available, periods[0])
+            planned_by, plan = "script", _plan_summary(frame)
+        else:
+            frame, planned_by, plan = _planned(
+                planner, make_executor, frame, available, periods, QUESTION
+            )
 
         real_key = deflated_column_key(BALANCE_KEY, CPI_KEY, periods[0])
         rate_column = next(c for c in frame.columns if c.key == RATE_KEY)
@@ -282,6 +466,8 @@ def build_turn1(
             evidence=tuple(evidence),
             caveats=caveats,
             elapsed_seconds=time.perf_counter() - started,
+            planned_by=planned_by,
+            plan=plan,
         )
     finally:
         source.close()
