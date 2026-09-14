@@ -21,11 +21,12 @@ from kkb_agent.catalog.build import (
     FINTURK_T06_COLUMN,
     _label_unit,
     _measure_from,
+    evds_measure,
     iter_bddk_aylik,
     iter_bddk_haftalik,
     scope_matches,
 )
-from kkb_agent.catalog.schema import MeasureType
+from kkb_agent.catalog.schema import MeasureType, normalise_unit
 from kkb_agent.transform.cumulative import StatementKind
 
 SCOPES = {10001: "Sektör", 10002: "Mevduat", 10003: "Katılım"}
@@ -195,6 +196,78 @@ class TestFinturkTable6:
         """Verified against table 1: kişi başı x nüfus reproduces Nakdi Krediler to
         within 0.02% across all 81 provinces. scripts/check_finturk_units.py re-runs it."""
         assert FINTURK_T06_COLUMN["Kişi Başı Nakdi Kredi"][0] == "TL"
+
+
+class TestEvdsMeasure:
+    """SCRUM-99 - EVDS states its own unit, so stop inferring from the series name."""
+
+    @pytest.mark.parametrize(
+        ("name", "unit", "expected"),
+        [
+            ("Konut kredisi faizi (TL, akım)", "Yüzde", MeasureType.RATE),
+            ("Takipteki alacaklar oranı", "Yüzde", MeasureType.RATIO),
+            ("Tüketici Fiyat Endeksi", "2003=100", MeasureType.INDEX),
+            ("Konut Fiyat Endeksi", "Endeks", MeasureType.INDEX),
+            ("Bankacılık sektörü kredileri", "bin TL", MeasureType.STOCK),
+            ("Toplam uluslararası rezervler", "milyon ABD doları", MeasureType.STOCK),
+            ("Şube sayısı", "Adet", MeasureType.COUNT),
+        ],
+    )
+    def test_unit_decides(self, name: str, unit: str, expected: MeasureType):
+        assert evds_measure(name, unit) is expected
+
+    def test_percent_splits_on_the_name_because_the_unit_cannot(self):
+        """Yüzde covers both. A rate averages when downsampled; a ratio takes the end."""
+        assert evds_measure("Ağırlıklı ortalama faiz", "Yüzde") is MeasureType.RATE
+        assert evds_measure("Sermaye yeterlilik", "Yüzde") is MeasureType.RATIO
+
+    def test_no_unit_means_unknown_rather_than_a_guess(self):
+        """164 of 678 datagroups publish no unit. Those stay unservable, not assumed."""
+        assert evds_measure("Bankacılık sektörü kredileri", "") is MeasureType.UNKNOWN
+
+    def test_financial_accounts_flow_is_a_flow(self):
+        """The only loan FLOW published anywhere we hold (SCRUM-95, DECISIONS #10)."""
+        name = "F.4.Krediler, Hanehalkı (Konsolide Akım)"
+        assert evds_measure(name, "bin TL") is MeasureType.FLOW
+
+    def test_the_stock_twin_of_the_same_line_stays_a_stock(self):
+        name = "VF.4.Krediler, Hanehalkı (Konsolide Olmayan, Stok)"
+        assert evds_measure(name, "bin TL") is MeasureType.STOCK
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Konutun Tamir ve Bakımı",
+            "Ev Bakımı ve Hizmetleri",
+            "Sağlık ve Kişisel Bakım",
+        ],
+    )
+    def test_bakim_is_not_read_as_akim(self, name: str):
+        """'bakım' contains 'akım'. A substring test turns maintenance into a flow, and
+        2,585 price-index series match it."""
+        assert evds_measure(name, "bin TL") is MeasureType.STOCK
+
+
+class TestEvdsUnits:
+    @pytest.mark.parametrize(
+        ("published", "expected"),
+        [
+            ("Yüzde", ("%", 1.0)),
+            ("bin TL", ("TRY", 1_000.0)),
+            ("milyon ABD doları", ("USD", 1_000_000.0)),
+            ("bin ABD doları", ("USD", 1_000.0)),
+            ("2003=100", ("endeks", 1.0)),
+            ("Bin kişi", ("kişi", 1_000.0)),
+        ],
+    )
+    def test_evds_spellings_normalise(self, published: str, expected: tuple[str, float]):
+        assert normalise_unit(published) == expected
+
+    @pytest.mark.parametrize("published", ["Yüzde, TL", "bin TL veya yüzde", "TL/m2"])
+    def test_a_unit_naming_two_possibilities_is_refused(self, published: str):
+        """The datagroup cannot say which applies, so neither can we. Unservable beats
+        a coin flip that produces a plausible wrong number."""
+        assert normalise_unit(published) == ("", 1.0)
 
 
 class TestWeeklyCurrency:

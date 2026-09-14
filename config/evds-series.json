@@ -2,33 +2,2256 @@
   "start_date": "2021-01-01",
   "end_date": "2026-06-30",
   "is_full_evds_catalog": false,
-  "scope_note": "Demo senaryosu ve en yakın bankacılık/makroekonomi soruları için seçilmiş ilk geliştirme alt kümesi; tüm EVDS kataloğunu temsil etmez.",
+  "scope_note": "EVDS kataloğunun tamamı yürünerek (154 kategori, 678 veri grubu) 53,792 seri indekslendi; bunlardan bankacılık sorularına cevap veren, birimi bilinen ve 2021-2026 aralığını kapsayan seriler seçildi. Seçim scripts/select_evds_series.py ile yeniden üretilebilir.",
   "known_gaps": [
-    "EVDS'nin yaklaşık 250 serilik hedef geliştirme havuzu henüz bu ilk alt kümeye tamamen eklenmedi.",
-    "BDDK haftalık bültenleri ve FinTürk bu EVDS ingestion çalışmasının kapsamında değildir."
+    "EVDS veri gruplarının 164'ünde birim (BIRIMI) alanı boş; birimi belirtilemeyen seri servis edilemediği için bu gruplar seçime dahil edilmedi.",
+    "Uluslararası istatistikler, ödemeler dengesi ve TCMB bilanço kategorileri kapsam dışı bırakıldı; bu projenin sorduğu sorular bunlara değmiyor."
   ],
   "series": [
-    {"code": "TP.KTF10", "name": "İhtiyaç kredisi faizi (TL, akım)", "frequency": "weekly"},
-    {"code": "TP.KTF101", "name": "İhtiyaç kredisi faizi, KMH dahil (TL, akım)", "frequency": "weekly"},
-    {"code": "TP.KTF11", "name": "Taşıt kredisi faizi (TL, akım)", "frequency": "weekly"},
-    {"code": "TP.KTF12", "name": "Konut kredisi faizi (TL, akım)", "frequency": "weekly"},
-    {"code": "TP.KTF17", "name": "Ticari kredi faizi (TL, akım)", "frequency": "weekly"},
-    {"code": "TP.KTF18", "name": "Ticari kredi faizi, KMH ve kurumsal kartlar hariç (TL, akım)", "frequency": "weekly"},
-    {"code": "TP.KTFTUK", "name": "Tüketici kredisi faizi (TL, akım)", "frequency": "weekly"},
-    {"code": "TP.KFE.TR", "name": "Konut Fiyat Endeksi", "frequency": "monthly"},
-    {"code": "TP.GENENDEKS.T1", "name": "Tüketici Fiyat Endeksi (2003=100)", "frequency": "monthly"},
-    {"code": "TP.DK.USD.S", "name": "ABD doları döviz satış kuru", "frequency": "daily"},
-    {"code": "TP.DK.EUR.S", "name": "Euro döviz satış kuru", "frequency": "daily"},
-    {"code": "TP.AB.B6", "name": "Toplam uluslararası rezervler", "frequency": "monthly"},
-    {"code": "TP.KM.F01", "name": "Tasarruf mevduatı", "frequency": "monthly"},
-    {"code": "TP.KM.F19", "name": "Döviz tevdiat hesapları", "frequency": "monthly"},
-    {"code": "TP.KM.F35", "name": "Toplam mevduat", "frequency": "monthly"},
-    {"code": "TP.KKM.K4", "name": "TL kur korumalı mevduat toplamı", "frequency": "monthly"},
-    {"code": "TP.TOP.T18", "name": "Bankacılık sektörü kredileri", "frequency": "monthly"},
-    {"code": "TP.TOP.T19", "name": "Bankacılık sektörü tasfiye olunacak alacaklar (net)", "frequency": "monthly"},
-    {"code": "TP.TOP.T41", "name": "Bankacılık sektörü toplam varlıkları", "frequency": "monthly"},
-    {"code": "TP.TOP.V01", "name": "Bankacılık sektörü mevduatı", "frequency": "monthly"},
-    {"code": "TP.TOP.V28", "name": "Bankacılık sektörü özkaynakları", "frequency": "monthly"},
-    {"code": "TP.KKO2.IS.TOP", "name": "İmalat sanayi kapasite kullanım oranı", "frequency": "monthly"}
+    {
+      "code": "TP.AB.B6",
+      "name": "Toplam uluslararası rezervler",
+      "frequency": "monthly",
+      "unit": "milyon ABD doları",
+      "unit_source": "EVDS metadata, sibling datagroup"
+    },
+    {
+      "code": "TP.BKR.EUR.1",
+      "name": "Ticari Krediler (Euro, Stok, %)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.BKR.TRY.1",
+      "name": "Ticari Krediler (TL, Stok, %)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.BKR.TRY.17",
+      "name": "Taşıt Kredisi (TL, Stok, %)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.BKR.TRY.18",
+      "name": "Konut Kredisi (TL, Stok, %)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.BKR.TRY.KTF18",
+      "name": "Ticari Krediler (Tüzel Kişi KMH ve Kurumsal Kredi Kartları Hariç) (TL, Stok,%)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.BKR.TRY.KTFTUK",
+      "name": "Tüketici Kredisi (İhtiyaç+Taşıt+Konut) (TL, Stok,%)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.BKR.TRY.KTFTUK01",
+      "name": "Tüketici Kredisi (KMH Dahil) (TL Üzerinden Açılan) (İhtiyaç+Taşıt+Konut) (Stok,%)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.BKR.USD.1",
+      "name": "Ticari Krediler (ABD doları, Stok, %)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.DIBSPIYDEG.S15",
+      "name": "1.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15)",
+      "frequency": "weekly",
+      "unit": "milyon TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_dibspiydeg",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.DIBSVADE.C1.S15",
+      "name": "2.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Orijinal Vade, Kısa)",
+      "frequency": "weekly",
+      "unit": "milyon TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_dibsvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.DIBSVADE.C2.S15",
+      "name": "3.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Orijinal Vade, Uzun)",
+      "frequency": "weekly",
+      "unit": "milyon TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_dibsvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.DIBSVADE.C3.S15",
+      "name": "4.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Kalan Vade, Kısa)",
+      "frequency": "weekly",
+      "unit": "milyon TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_dibsvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.DIBSVADE.C4.S15",
+      "name": "5.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Kalan Vade, Uzun)",
+      "frequency": "weekly",
+      "unit": "milyon TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_dibsvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.DIBSVADE.C5.S15",
+      "name": "1.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Toplam)",
+      "frequency": "weekly",
+      "unit": "milyon TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_dibsvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.DIBSYAZDEG.S15",
+      "name": "1.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15)",
+      "frequency": "weekly",
+      "unit": "milyon TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_dibsyazdeg",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.DK.EUR.S",
+      "name": "Euro döviz satış kuru",
+      "frequency": "daily",
+      "unit": "Türk lirası",
+      "unit_source": "EVDS metadata, sibling datagroup"
+    },
+    {
+      "code": "TP.DK.USD.S",
+      "name": "ABD doları döviz satış kuru",
+      "frequency": "daily",
+      "unit": "Türk lirası",
+      "unit_source": "EVDS metadata, sibling datagroup"
+    },
+    {
+      "code": "TP.EBONDPIYDEG.S15",
+      "name": "1.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondpiydeg",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EBONDVADE.C1.S15",
+      "name": "2.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Orijinal Vade, Kısa)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EBONDVADE.C2.S15",
+      "name": "3.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Orijinal Vade, Uzun)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EBONDVADE.C3.S15",
+      "name": "4.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Kalan Vade, Kısa)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EBONDVADE.C4.S15",
+      "name": "5.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Kalan Vade, Uzun)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EBONDVADE.C5.S15",
+      "name": "6.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (ABD doları İhraçlar)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EBONDVADE.C6.S15",
+      "name": "7.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Euro İhraçlar)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EBONDVADE.C7.S15",
+      "name": "8.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (JPY İhraçlar)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EBONDVADE.C8.S15",
+      "name": "1.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15) (Toplam)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondvade",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EBONDYAZDEG.S15",
+      "name": "1.1.5.Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (S.15)",
+      "frequency": "weekly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_ebondyazdeg",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT01.K",
+      "name": "1 Aya Kadar Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210ak",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT01.S",
+      "name": "1 Aya Kadar Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210as",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT02.K",
+      "name": "3 Aya Kadar Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210ak",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT02.S",
+      "name": "3 Aya Kadar Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210as",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT03.K",
+      "name": "6 Aya Kadar Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210ak",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT03.S",
+      "name": "6 Aya Kadar Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210as",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT04.K",
+      "name": "1 Yıla Kadar Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210ak",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT04.S",
+      "name": "1 Yıla Kadar Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210as",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT05.K",
+      "name": "1 Yıl ve Daha Uzun Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210ak",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EUR.MT05.S",
+      "name": "1 Yıl ve Daha Uzun Vadeli (Euro, %)",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt210as",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EURTIC.MT01",
+      "name": "1 Aya Kadar Vadeli (Euro Ticari Mevduat, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EURTIC.MT02",
+      "name": "3 Aya Kadar Vadeli (Euro Ticari Mevduat, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EURTIC.MT03",
+      "name": "6 Aya Kadar Vadeli (Euro Ticari Mevduat, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EURTIC.MT04",
+      "name": "1 Yıla Kadar Vadeli (Euro Ticari Mevduat, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EURTIC.MT05",
+      "name": "1 Yıl ve Daha Uzun Vadeli (Euro Ticari Mevduat, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.EURTIC.MT06",
+      "name": "Toplam (Euro Ticari Mevduat, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FDVY26",
+      "name": "B.a.1.3.TMSF'ye Devrolunan Takipli Krediler",
+      "frequency": "monthly",
+      "unit": "milyon ABD doları",
+      "unit_source": "datagroup",
+      "datagroup": "bie_fdvy",
+      "category": "REEL SEKTÖR İSTATİSTİKLERİ"
+    },
+    {
+      "code": "TP.FE25.OKTG01",
+      "name": "Tüketici Fiyat Endeksi (Genel)",
+      "frequency": "monthly",
+      "unit": "Endeks",
+      "unit_source": "series name",
+      "datagroup": "bie_oktug2025",
+      "category": "FİYAT ENDEKSLERİ"
+    },
+    {
+      "code": "TP.FINHESTNKS11.ZP12",
+      "name": "VF.4.Krediler,Finansal Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks11",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS11.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler,Finansal Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks11",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS11.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler,Finansal Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks11",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS11.ZP27",
+      "name": "F.2.Para ve Mevduat,Finansal Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks11",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS11.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat,Finansal Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks11",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS11.ZP30",
+      "name": "F.2.9.Vadeli Mevduat,Finansal Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks11",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS11.ZP34",
+      "name": "F.4.Krediler,Finansal Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks11",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS11.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler,Finansal Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks11",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS12.ZP12",
+      "name": "VF.4.Krediler,Finansal Kuruluşlar Toplam (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks12",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS12.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler,Finansal Kuruluşlar Toplam (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks12",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS12.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler,Finansal Kuruluşlar Toplam (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks12",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS12.ZP27",
+      "name": "F.2.Para ve Mevduat,Finansal Kuruluşlar Toplam (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks12",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS12.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat,Finansal Kuruluşlar Toplam (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks12",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS12.ZP30",
+      "name": "F.2.9.Vadeli Mevduat,Finansal Kuruluşlar Toplam (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks12",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS12.ZP34",
+      "name": "F.4.Krediler,Finansal Kuruluşlar Toplam (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks12",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS12.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler,Finansal Kuruluşlar Toplam (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks12",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS122.ZP1",
+      "name": "BF.9.NET FİNANSAL DEĞER,Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS122.ZP10",
+      "name": "VF.3.1.Kısa Vadeli Borçlanma Senetleri,Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS122.ZP12",
+      "name": "VF.4.Krediler,Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS122.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler,Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS122.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler,Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS122.ZP34",
+      "name": "F.4.Krediler,Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS122.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler,Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS122.ZP36",
+      "name": "F.4.2.Uzun Vadeli Krediler,Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS12T.ZP12",
+      "name": "VF.4.Krediler,Parasal ve Finansal Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks12t",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS15.ZP12",
+      "name": "VF.4.Krediler,Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks15",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS15.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler,Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks15",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS15.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler,Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks15",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS15.ZP27",
+      "name": "F.2.Para ve Mevduat,Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks15",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS15.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat,Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks15",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS15.ZP30",
+      "name": "F.2.9.Vadeli Mevduat,Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks15",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS15.ZP34",
+      "name": "F.4.Krediler,Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks15",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS15.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler,Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks15",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61011.ZP12",
+      "name": "VF.4.Krediler, Finansal Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61011",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61011.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Finansal Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61011",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61011.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Finansal Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61011",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61011.ZP27",
+      "name": "F.2.Para ve Mevduat, Finansal Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61011",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61011.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat, Finansal Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61011",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61011.ZP30",
+      "name": "F.2.9.Vadeli Mevduat, Finansal Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61011",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61011.ZP34",
+      "name": "F.4.Krediler, Finansal Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61011",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61011.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Finansal Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61011",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012.ZP12",
+      "name": "VF.4.Krediler, Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012.ZP27",
+      "name": "F.2.Para ve Mevduat, Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat, Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012.ZP30",
+      "name": "F.2.9.Vadeli Mevduat, Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012.ZP34",
+      "name": "F.4.Krediler, Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS610122.ZP1",
+      "name": "BF.9.NET FİNANSAL DEĞER, Mevduat Kabul Eden Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks610122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS610122.ZP10",
+      "name": "VF.3.1.Kısa Vadeli Borçlanma Senetleri, Mevduat Kabul Eden Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks610122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS610122.ZP12",
+      "name": "VF.4.Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks610122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS610122.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks610122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS610122.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks610122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS610122.ZP34",
+      "name": "F.4.Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks610122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS610122.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks610122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS610122.ZP36",
+      "name": "F.4.2.Uzun Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks610122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012T.ZP12",
+      "name": "VF.4.Krediler, Parasal ve Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012t",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012T.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Parasal ve Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012t",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012T.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Parasal ve Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012t",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012T.ZP27",
+      "name": "F.2.Para ve Mevduat, Parasal ve Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012t",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012T.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat, Parasal ve Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012t",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012T.ZP30",
+      "name": "F.2.9.Vadeli Mevduat, Parasal ve Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012t",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012T.ZP34",
+      "name": "F.4.Krediler, Parasal ve Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012t",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61012T.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Parasal ve Finansal Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61012t",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS6101314.ZP12",
+      "name": "VF.4.Krediler, Sosyal Güvenlik Kuruluşları (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks6101314",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS6101314.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Sosyal Güvenlik Kuruluşları (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks6101314",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS6101314.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Sosyal Güvenlik Kuruluşları (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks6101314",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS6101314.ZP27",
+      "name": "F.2.Para ve Mevduat, Sosyal Güvenlik Kuruluşları (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks6101314",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS6101314.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat, Sosyal Güvenlik Kuruluşları (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks6101314",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS6101314.ZP30",
+      "name": "F.2.9.Vadeli Mevduat, Sosyal Güvenlik Kuruluşları (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks6101314",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS6101314.ZP34",
+      "name": "F.4.Krediler, Sosyal Güvenlik Kuruluşları (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks6101314",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS6101314.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Sosyal Güvenlik Kuruluşları (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks6101314",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61014.ZP12",
+      "name": "VF.4.Krediler, Hanehalkı (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61014",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61014.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Hanehalkı (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61014",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61014.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Hanehalkı (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61014",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61014.ZP27",
+      "name": "F.2.Para ve Mevduat, Hanehalkı (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61014",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61014.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat, Hanehalkı (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61014",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61014.ZP34",
+      "name": "F.4.Krediler, Hanehalkı (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61014",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER",
+      "note": "hanehalkı kredi akımı (net), üç aylık"
+    },
+    {
+      "code": "TP.FINHESTNKS61014.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Hanehalkı (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61014",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER",
+      "note": "hanehalkı kısa vadeli kredi akımı (net)"
+    },
+    {
+      "code": "TP.FINHESTNKS61014.ZP36",
+      "name": "F.4.2.Uzun Vadeli Krediler, Hanehalkı (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61014",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER",
+      "note": "hanehalkı uzun vadeli kredi akımı (net) - konut ağırlıklı"
+    },
+    {
+      "code": "TP.FINHESTNKS61015.ZP12",
+      "name": "VF.4.Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61015.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61015.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61015.ZP27",
+      "name": "F.2.Para ve Mevduat, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61015.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61015.ZP30",
+      "name": "F.2.9.Vadeli Mevduat, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61015.ZP34",
+      "name": "F.4.Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS61015.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks61015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS620122.ZP12",
+      "name": "VF.4.Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks620122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS620122.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks620122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS620122.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks620122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS620122.ZP34",
+      "name": "F.4.Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks620122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS620122.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks620122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS620122.ZP36",
+      "name": "F.4.2.Uzun Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks620122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS62015.ZP12",
+      "name": "VF.4.Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks62015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS62015.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks62015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS62015.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks62015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS62015.ZP27",
+      "name": "F.2.Para ve Mevduat, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks62015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS62015.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks62015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS62015.ZP30",
+      "name": "F.2.9.Vadeli Mevduat, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks62015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS62015.ZP34",
+      "name": "F.4.Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks62015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS62015.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Olmayan, Akım)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks62015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS710122.ZP12",
+      "name": "VF.4.Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks710122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS710122.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks710122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS710122.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks710122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS710122.ZP34",
+      "name": "F.4.Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks710122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS710122.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks710122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS710122.ZP36",
+      "name": "F.4.2.Uzun Vadeli Krediler, Mevduat Kabul Eden Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks710122",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS71015.ZP12",
+      "name": "VF.4.Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks71015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS71015.ZP13",
+      "name": "VF.4.1.Kısa Vadeli Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks71015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS71015.ZP14",
+      "name": "VF.4.2.Uzun Vadeli Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks71015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS71015.ZP27",
+      "name": "F.2.Para ve Mevduat, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks71015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS71015.ZP29",
+      "name": "F.2.2.Vadesiz Mevduat, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks71015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS71015.ZP30",
+      "name": "F.2.9.Vadeli Mevduat, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks71015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS71015.ZP34",
+      "name": "F.4.Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks71015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINHESTNKS71015.ZP35",
+      "name": "F.4.1.Kısa Vadeli Krediler, Hanehalkına Hizmet Veren Kar Amacı Olmayan Kuruluşlar (Konsolide Stok)",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finhestnks71015",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINSVERI1.K48",
+      "name": "13.1.Hanehalkının Hayat Sigortası Rezervlerindeki Net Sermayesi",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finsveri1",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FINSVERI1.K51",
+      "name": "13.2.Hanehalkının Emeklilik Fonları Rezervlerindeki Net Sermayesi",
+      "frequency": "quarterly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_finsveri1",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FKF.TRY.1",
+      "name": "Ticari Krediler (TL, Stok, %)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_fs101a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.FKF.TRY.15",
+      "name": "Tüketici Kredisi (TL, Stok, %)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_fs101a",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.GENENDEKS.T1",
+      "name": "Genel Endeks (2003=100)",
+      "frequency": "monthly",
+      "unit": "Endeks",
+      "unit_source": "series name",
+      "datagroup": "bie_tukfiy2003",
+      "category": "FİYAT ENDEKSLERİ"
+    },
+    {
+      "code": "TP.KB.DVDY29",
+      "name": "2.2.3. Ticari ve Diğer Kur. Fonu (Yurt Dışı Yerleşik Tüzel Kişiler)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kbdvdy",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FON011",
+      "name": "1.1.2.2. Diğ.Kur. Fonu, Devl.Me. İs. Emek. Konut Ed. Yard. Hes.",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbksmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FON022",
+      "name": "2.1. Ticari Kuruluşlar, KİT ile Bağlı Müessese ve Ortaklıklar (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbksmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FON024",
+      "name": "2.3. Yerel Yönetimlerin Ticari İşletmeleri (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbksmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FON028",
+      "name": "3.1.1. Her Türlü Ortaklıklar (Sigorta Şir. Hariç) (Ticari Fon)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbksmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FON029",
+      "name": "3.1.2. Vakıf, Dernek, Sendika ve Birliklerin Ticari İşlet. (Ticari Fon)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbksmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FON030",
+      "name": "3.1.3. Kooperatifler (Ticari Fon)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbksmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FON032",
+      "name": "3.2.1. Gerçek Kişi Ticaret İşletmeleri (Ticari Fon)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbksmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FON033",
+      "name": "3.3. Hanehalkı (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbksmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FTR04",
+      "name": "2.TICARI KURUMLAR FONU (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbtrmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FTR27",
+      "name": "7.8.Özel Kanunla Mevduat Kabulüne Yetkili Kuruluşlar",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbtrmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FVD04",
+      "name": "1.1.2. Ticari Kurumlar Fonu",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbvdmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FVD10",
+      "name": "1.2.1.2. Ticari Kurumlar Fonu",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbvdmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FVD15",
+      "name": "1.2.2.2. Ticari Kurumlar Fonu",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbvdmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FVD20",
+      "name": "1.2.3.2. Ticari Kurumlar Fonu",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbvdmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FVD25",
+      "name": "1.2.3.2. Ticari Kurumlar Fonu.D",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbvdmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.FVD30",
+      "name": "1.2.4.2. Ticari Kurumlar Fonu",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkbvdmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.KRE06",
+      "name": "3.3. Hanehalk. Hizm. Ver. Kar Amacı Olm. Kur.",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kbkmkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.KRE08",
+      "name": "4. Hanehalkı",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kbkmkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.KRE09",
+      "name": "4.1. Tüketici Kredileri",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kbkmkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.KRE10",
+      "name": "4.1.1. Konut Kredileri",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kbkmkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.KRE11",
+      "name": "4.1.2. Taşıt Kredileri",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kbkmkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.KRE13",
+      "name": "4.2. Bireysel Kredi Kartları",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kbkmkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.KRE14",
+      "name": "5.MALİ KURULUŞLAR",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kbkmkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KB.KRE16",
+      "name": "5.2. Banka Dışı Mali Kuruluşlar",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kbkmkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KBK.TRY.KBTF18",
+      "name": "Ticari Krediler (Tüzel Kişi ÖCH Müşterilerine Kullandırımlar ve Kurumsal Kredi Kartları Hariç) (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt200h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KBK.TRY.KBTFTUK",
+      "name": "Tüketici Kredisi (İhtiyaç+Taşıt+Konut)) (TL, Akım,%)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt200h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KBK.TRY.KBTFTUK01",
+      "name": "Tüketici Kredisi (ÖCH Müşterilerine Kullandırımlar Dahil) (İhtiyaç+Taşıt+Konut) (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt200h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KFE.TR",
+      "name": "Konut Fiyat Endeksi (KFE)",
+      "frequency": "monthly",
+      "unit": "Endeks",
+      "unit_source": "series name",
+      "datagroup": "bie_kfe",
+      "category": "FİYAT ENDEKSLERİ"
+    },
+    {
+      "code": "TP.KKM.K4",
+      "name": "TL kur korumalı mevduat toplamı",
+      "frequency": "monthly",
+      "unit": "",
+      "unit_source": ""
+    },
+    {
+      "code": "TP.KKO2.IS.TOP",
+      "name": "İmalat Sanayi Kapasite Kullanım Oranı",
+      "frequency": "monthly",
+      "unit": "Yüzde",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kko2",
+      "category": "REEL SEKTÖR İSTATİSTİKLERİ"
+    },
+    {
+      "code": "TP.KKP.TRY.KTF18",
+      "name": "Ticari Krediler (Tüzel Kişi ÖCH Müşterilerine Kullandırımlar ve Kurumsal Kredi Kartları Hariç) (TL, Stok,%)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210aks",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KKP.TRY.KTFTUK",
+      "name": "Tüketici Kredisi (İhtiyaç+Taşıt+Konut) (TL, Stok,%)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210aks",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KKP.TRY.KTFTUK01",
+      "name": "Tüketici Kredisi (ÖCH Müşterilerine Kullandırımlar Dahil) (İhtiyaç+Taşıt+Konut) (TL, Stok, %)",
+      "frequency": "monthly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt210aks",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.A16",
+      "name": "3.3.Hanehalkına Hizmet Veren Kar Amacı Olm. Kuruluşlar",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmkykre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.B04",
+      "name": "1.3. Sosyal Güvenlik Kurumları",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.B09",
+      "name": "3.2. Hanehalkı",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.B10",
+      "name": "3.2.1. Tüketici Kredileri",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.B11",
+      "name": "3.2.1.1. Konut Kredileri",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.B12",
+      "name": "3.2.1.2. Taşıt Kredileri",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.B14",
+      "name": "3.2.2. Bireysel Kredi Kartları",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.B18",
+      "name": "3.4. Hanehalk. Hizm. Ver. Kar Amacı Olm. Kur.",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.B20",
+      "name": "4.MALİ KURULUŞLAR",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkre",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.E017",
+      "name": "1.1.2.3. Diğ.Kur. Mev., Devl.Me. İş. Emek. Konut Ed. Yard. Hes.",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.E029",
+      "name": "2.1. Ticari Kuruluşlar, KİT ile Bağlı Müessese ve Ortaklıklar (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.E031",
+      "name": "2.3. Yerel Yönetimlerin Ticari İşletmeleri (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.E036",
+      "name": "3.1.2. Vakıf, Dernek, Sendika ve Birliklerin Ticari İşlet. (Tic. Mev.)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.E040",
+      "name": "3.3. Hanehalkı (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.E043",
+      "name": "3.4. Hanehalkına Hiz. Veren Kar Amacı Olmayan Kur. (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.E050",
+      "name": "3.8.1. Hanehalkı, Yurt İçinde Yerleşik Gerçek Kişiler",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.E056",
+      "name": "3.9.1. Hanehalkı, Yurt İçinde Yerleşik Gerçek Kişiler",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.F01",
+      "name": "1. TASARRUF MEVDUATI",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbtmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.F19",
+      "name": "6. DÖVİZ TEVDİAT HESAPLARI",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbtmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.F35",
+      "name": "9. TOPLAM",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbtmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.G04",
+      "name": "1.1.2.Ticari Kurumlar Mevduatı",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbgmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.G11",
+      "name": "1.2.2.Ticari Kurumlar Mevduatı",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbgmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.G17",
+      "name": "1.3.1.2.Ticari Kurumlar Mevduatı",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbgmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.G24",
+      "name": "1.3.2.2.Ticari Kurumlar Mevduatı",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbgmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.G31",
+      "name": "1.3.3.2.Ticari Kurumlar Mevduatı",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbgmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.G38",
+      "name": "1.3.4.2.Ticari Kurumlar Mevduatı",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbgmv",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KM.K43",
+      "name": "8.2.2.3. Tüketici Finansman Şirketleri",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kmmbkcz",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KTF10",
+      "name": "İhtiyaç Kredisi (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KTF101",
+      "name": "İhtiyaç Kredisi (KMH Dahil) (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KTF11",
+      "name": "Taşıt Kredisi (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KTF12",
+      "name": "Konut Kredisi (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KTF17",
+      "name": "Ticari Krediler (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KTF18",
+      "name": "Ticari Krediler (Tüzel Kişi KMH ve Kurumsal Kredi Kartları Hariç) (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KTFTUK",
+      "name": "Tüketici Kredisi (İhtiyaç+Taşıt+Konut) (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.KTFTUK01",
+      "name": "Tüketici Kredisi (KMH Dahil) (İhtiyaç+Taşıt+Konut) (TL, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_kt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.MB.DVDY34",
+      "name": "2.2.2. Ticari Kurumlar Mevduatı Gerçek Kişiler, Ticari İşletmeler (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mbdvdy",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.MB.DVDY35",
+      "name": "2.2.3. Ticari Kurumlar Mevduatı, Her Çesit Ortaklıklar (TL)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mbdvdy",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.MB.DVDY40",
+      "name": "2.2.8. Kullanılan Krediler, Yurt Dışı Fonlar ve Diğer Kuruluşlar",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mbdvdy",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.RK.T1.Y",
+      "name": "TÜFE Bazlı Reel Efektif Döviz Kuru (2025=100)",
+      "frequency": "monthly",
+      "unit": "Endeks",
+      "unit_source": "datagroup",
+      "datagroup": "bie_rktufey",
+      "category": "DÖVİZ KURLARI VE KIYMETLİ MADENLER"
+    },
+    {
+      "code": "TP.RK.T2.Y",
+      "name": "TÜFE Gelişmekte Olan Ülkeler Bazlı Reel Efektif Döviz Kuru (2025=100)",
+      "frequency": "monthly",
+      "unit": "Endeks",
+      "unit_source": "datagroup",
+      "datagroup": "bie_rktufey",
+      "category": "DÖVİZ KURLARI VE KIYMETLİ MADENLER"
+    },
+    {
+      "code": "TP.RK.T3.Y",
+      "name": "TÜFE Gelişmiş Ülkeler Bazlı Reel Efektif Döviz Kuru (2025=100)",
+      "frequency": "monthly",
+      "unit": "Endeks",
+      "unit_source": "datagroup",
+      "datagroup": "bie_rktufey",
+      "category": "DÖVİZ KURLARI VE KIYMETLİ MADENLER"
+    },
+    {
+      "code": "TP.TOP.T18",
+      "name": "14.KREDİLER",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_pbtop",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.TOP.T19",
+      "name": "15.TASFİYE OLUNACAK ALACAKLAR (NET)",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_pbtop",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.TOP.T41",
+      "name": "30.TOPLAM VARLIKLAR",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_pbtop",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.TOP.V01",
+      "name": "31.MEVDUAT",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_pbtop",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.TOP.V28",
+      "name": "49.ÖZKAYNAKLAR",
+      "frequency": "monthly",
+      "unit": "bin TL",
+      "unit_source": "datagroup",
+      "datagroup": "bie_pbtop",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.TRYTIC.MT01",
+      "name": "1 Aya Kadar Vadeli (TL Ticari Mevduat, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    },
+    {
+      "code": "TP.TRYTIC.MT02",
+      "name": "3 Aya Kadar Vadeli (TL Ticari Mevduat, Akım, %)",
+      "frequency": "weekly",
+      "unit": "Ağırlıklı ortalama",
+      "unit_source": "datagroup",
+      "datagroup": "bie_mt100h",
+      "category": "PARASAL VE FİNANSAL İSTATİSTİKLER"
+    }
   ]
 }
