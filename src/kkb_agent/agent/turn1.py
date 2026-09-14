@@ -54,6 +54,19 @@ from kkb_agent.frame import (
 Frame = AnalysisFrame
 
 
+class StageCallback(Protocol):
+    """Called at each real phase boundary, so a stream reports work rather than theatre.
+
+    `stage` is one of the brief's five; `event` is "start" or "end"; `outcome` is set only
+    on an end. A stage that fails ends with "failed" before the exception propagates -
+    a stream that simply stops mid-stage tells the reader nothing about where it stopped.
+    """
+
+    def __call__(
+        self, stage: str, event: str, *, outcome: str | None = None, tool: str | None = None
+    ) -> None: ...
+
+
 class Planner(Protocol):
     """What turn 1 needs from a planner. OperationPlanner satisfies it."""
 
@@ -202,6 +215,23 @@ def _deflate(executor, frame: Frame, column_key: str, base: date) -> Frame:
             resulting_version=frame.version + 1,
         ),
     )
+
+
+class _Stage:
+    """Emits start/end around a phase, and "failed" if the phase raises."""
+
+    def __init__(self, name: str, notify, tool: str | None = None):
+        self._name, self._notify, self._tool = name, notify, tool
+
+    def __enter__(self):
+        self._notify(self._name, "start", tool=self._tool)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self._notify(
+            self._name, "end", outcome="failed" if exc_type else "succeeded", tool=self._tool
+        )
+        return False
 
 
 def _plan_summary(frame: Frame) -> tuple[str, ...]:
@@ -370,6 +400,7 @@ def build_turn1(
     start: date = WINDOW_START,
     end: date = WINDOW_END,
     planner: Planner | None = None,
+    on_stage: StageCallback | None = None,
 ) -> TurnResult:
     """Resolve, assemble and compute the answer to the first published question.
 
@@ -394,44 +425,53 @@ def build_turn1(
 
     executor = make_executor()
 
-    try:
-        rows, concepts = _load_catalog(connection)
-        provinces = frozenset(r["province"] for r in rows if r.get("province"))
+    notify = on_stage or (lambda *a, **k: None)
 
-        balance = resolve_series(
-            concepts, BALANCE_QUESTION, candidates=rows, provinces=provinces, limit=8
-        )
-        rate = resolve_series(
-            concepts, RATE_QUESTION, candidates=rows, provinces=provinces, limit=8
-        )
-        if not balance.resolved or not rate.resolved:
-            raise RuntimeError("turn 1 could not resolve both of its series")
+    def stage(name: str, tool: str | None = None):
+        return _Stage(name, notify, tool)
+
+    try:
+        with stage("data_discovery", tool="lakehouse"):
+            rows, concepts = _load_catalog(connection)
+            provinces = frozenset(r["province"] for r in rows if r.get("province"))
+            balance = resolve_series(
+                concepts, BALANCE_QUESTION, candidates=rows, provinces=provinces, limit=8
+            )
+            rate = resolve_series(
+                concepts, RATE_QUESTION, candidates=rows, provinces=provinces, limit=8
+            )
+            if not balance.resolved or not rate.resolved:
+                raise RuntimeError("turn 1 could not resolve both of its series")
 
         balance_id, rate_id = balance.series_ids[0], rate.series_ids[0]
 
         # The balance defines the spine: it is the monthly series, and the rate is weekly
         # and will be collapsed onto it. Building the spine from the rate instead would
         # give a weekly axis the balance cannot fill.
-        periods = _spine_periods(connection, balance_id, start, end)
-        if not periods:
-            raise RuntimeError(f"no {balance_id} observations between {start} and {end}")
+        with stage("data_preparation"):
+            periods = _spine_periods(connection, balance_id, start, end)
+            if not periods:
+                raise RuntimeError(f"no {balance_id} observations between {start} and {end}")
+            frame = Frame(frame_id="turn1", spine=Spine(values=periods, label="Dönem"))
 
-        frame = Frame(frame_id="turn1", spine=Spine(values=periods, label="Dönem"))
         available = {
             BALANCE_KEY: balance_id,
             RATE_KEY: rate_id,
             CPI_KEY: CPI_SERIES_ID,
         }
 
-        if planner is None:
-            frame = _scripted_plan(executor, frame, available, periods[0])
-            planned_by, plan = "script", _plan_summary(frame)
-        else:
-            frame, planned_by, plan = _planned(
-                planner, make_executor, frame, available, periods, QUESTION
-            )
+        with stage("agentic_analytics"):
+            if planner is None:
+                frame = _scripted_plan(executor, frame, available, periods[0])
+                planned_by, plan = "script", _plan_summary(frame)
+            else:
+                frame, planned_by, plan = _planned(
+                    planner, make_executor, frame, available, periods, QUESTION
+                )
 
         real_key = deflated_column_key(BALANCE_KEY, CPI_KEY, periods[0])
+        analysis = stage("analysis")
+        analysis.__enter__()
         rate_column = next(c for c in frame.columns if c.key == RATE_KEY)
         decline = find_decline_window(rate_column.values)
 
@@ -459,7 +499,10 @@ def build_turn1(
             ]
 
         frame = _findings(frame, tuple(evidence), real_key, periods, decline)
-        caveats = _caveats(frame, balance, rate)
+        analysis.__exit__(None, None, None)
+
+        with stage("verification"):
+            caveats = _caveats(frame, balance, rate)
         return TurnResult(
             frame=frame,
             resolutions=(balance, rate),

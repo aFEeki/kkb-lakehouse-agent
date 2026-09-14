@@ -3,6 +3,7 @@
 import logging
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,7 @@ from kkb_agent.api.contracts import (
     StageStartEvent,
 )
 from kkb_agent.api.runner import AskRunner, UnavailableAskRunner
+from kkb_agent.api.turn1_runner import TurnOneAskRunner
 from kkb_agent.catalog.duckdb_store import DuckDBStore
 from kkb_agent.catalog.lance_store import LanceStore
 from kkb_agent.config import Settings
@@ -39,7 +41,8 @@ def create_app(
     *,
     ask_runner: AskRunner | None = None,
 ) -> FastAPI:
-    runner = ask_runner if ask_runner is not None else UnavailableAskRunner()
+    config_for_runner = settings if settings is not None else Settings()
+    runner = ask_runner if ask_runner is not None else _default_runner(config_for_runner)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -83,6 +86,20 @@ def create_app(
         )
 
     return application
+
+
+def _default_runner(config: Settings) -> AskRunner:
+    """Turn 1 when the catalog is present, the explicit placeholder when it is not.
+
+    A missing catalog is a deployment fact, not a bug, and it must not look like one: the
+    placeholder produces a clean error event and a failed completion, where a runner built
+    against an absent file would raise per request and log a stack trace every time.
+    """
+    catalog = config.duckdb_path
+    if not Path(catalog).exists():
+        logger.warning("Catalog %s is absent; /ask will report unavailable", catalog)
+        return UnavailableAskRunner()
+    return TurnOneAskRunner(catalog)
 
 
 async def _stream_ask(runner: AskRunner, request: AskRequest):
