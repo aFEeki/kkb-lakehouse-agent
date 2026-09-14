@@ -141,6 +141,10 @@ class Concept:
     scopes: frozenset[str] = field(default_factory=frozenset)
     frequencies: frozenset[str] = field(default_factory=frozenset)
     has_provinces: bool = False
+    # Whether any series behind this measure carries a figure. 4,496 of 47,015 series are
+    # published as 0.0 or null every period - real rows, useless answers - and a measure
+    # made only of those must never outrank one with data.
+    has_data: bool = True
 
     @property
     def key(self) -> tuple[str, str]:
@@ -237,6 +241,7 @@ def build_concepts(rows: list[dict]) -> list[Concept]:
             "scopes": set(),
             "frequencies": set(),
             "provinces": False,
+            "nonzero": 0,
         }
     )
 
@@ -257,6 +262,7 @@ def build_concepts(rows: list[dict]) -> list[Concept]:
                 g[key].add(str(value))
         if r.get("province"):
             g["provinces"] = True
+        g["nonzero"] += int(r.get("nonzero_observations") or 0)
 
     concepts = [
         Concept(
@@ -269,11 +275,39 @@ def build_concepts(rows: list[dict]) -> list[Concept]:
             scopes=frozenset(g["scopes"]),
             frequencies=frozenset(g["frequencies"]),
             has_provinces=g["provinces"],
+            has_data=g["nonzero"] > 0,
         )
         for (source, label), g in grouped.items()
     ]
     concepts.sort(key=lambda c: (c.source, c.label))
     return concepts
+
+
+# Words that make a label narrower rather than describing a different subject. A question
+# that does not say "takipteki" is not asking about non-performing loans, and a question
+# that does not say "dövize endeksli" is not asking about the FX-indexed slice.
+#
+# Without this, "konut kredisi" tied "Takipteki Konut Kredileri" with "Tüketici Kredileri
+# - Konut" - both have exactly one unmatched token - and the tie broke alphabetically, so
+# the answer to "how big are housing loans" was the non-performing ones.
+#
+# An explicit list, not a rule. These are domain facts about what restricts a series, and
+# a general "longer label loses" rule would also demote "Tüketici Kredileri - Konut",
+# which is the right answer.
+RESTRICTIVE_QUALIFIERS = frozenset(
+    {
+        "takipteki",  # non-performing
+        "tasfiye",  # in liquidation
+        "endeksli",  # FX-indexed slice
+        "arşiv",  # superseded publication
+        "reeskont",  # rediscount facility, not lending
+        "dışı",  # yurt dışı - the foreign-branch subset
+    }
+)
+
+# How much of its score a concept keeps per unrequested qualifier. Enough to lose a tie
+# decisively, not enough to bury a concept that is genuinely the only match.
+_QUALIFIER_PENALTY = 0.65
 
 
 def lexical_score(query_tokens: tuple[str, ...], concept: Concept) -> tuple[float, tuple[str, ...]]:
@@ -310,6 +344,10 @@ def lexical_score(query_tokens: tuple[str, ...], concept: Concept) -> tuple[floa
         return 0.0, ()
 
     harmonic = 2 * query_coverage * concept_coverage / (query_coverage + concept_coverage)
+
+    unrequested = RESTRICTIVE_QUALIFIERS & set(concept.tokens) - set(query_tokens)
+    harmonic *= _QUALIFIER_PENALTY ** len(unrequested)
+
     return harmonic, tuple(matched)
 
 
@@ -347,7 +385,13 @@ def search(
 
     # Ties broken towards the measure with fewer series behind it: a concept carried by
     # 10 national series is a more specific answer than one spread over 574 provinces.
-    hits.sort(key=lambda h: (-h.score, h.concept.series_count, h.concept.label))
+    # An empty measure sorts below every measure with data, whatever it scored. "konut
+    # kredisi" matched BDDK's "Ferdi Kredi Konut" above "Tüketici Kredileri - Konut" -
+    # and Ferdi Kredi Konut is 0.0 in all 66 months, so the better-scoring answer was an
+    # empty chart.
+    hits.sort(
+        key=lambda h: (not h.concept.has_data, -h.score, h.concept.series_count, h.concept.label)
+    )
     return hits[:limit]
 
 

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from kkb_agent.catalog.identity import identify, normalise_label
+from kkb_agent.catalog.identity import identify, normalise_label, turkish_casefold
 from kkb_agent.catalog.schema import (
     COUNT_UNITS,
     UNIT_SCALE,
@@ -102,6 +102,39 @@ FINTURK_T06_COLUMN: dict[str, tuple[str, MeasureType]] = {
     "Kişi Başı Tasarruf Mevduatı": ("TL", MeasureType.RATIO),
     "Kişi Başı Toplam Mevduat": ("TL", MeasureType.RATIO),
 }
+
+
+# One spelling per scope. BDDK writes bank groups in title case in the monthly bulletin
+# ("Sektör", "Kalkınma ve Yatırım") and in upper case in FinTürk ("SEKTÖR", "KALKINMA VE
+# YATIRIM"), which put 17 distinct values in a column holding nine scopes - so a filter on
+# sector_scope = 'Sektör' silently missed all 41,522 FinTürk rows.
+#
+# Keyed by Turkish casefold, because "SEKTÖR".lower() is "sektör" but "KATILIM".lower() is
+# "katilim" with a dotless ı only under the Turkish rule.
+CANONICAL_SCOPE: dict[str, str] = {
+    "sektör": "Sektör",
+    "mevduat": "Mevduat",
+    "katılım": "Katılım",
+    "kalkınma ve yatırım": "Kalkınma ve Yatırım",
+    "yerli özel": "Yerli Özel",
+    "kamu": "Kamu",
+    "yabancı": "Yabancı",
+    "mevduat-yerli özel": "Mevduat-Yerli Özel",
+    "mevduat-kamu": "Mevduat-Kamu",
+    "mevduat-yabancı": "Mevduat-Yabancı",
+}
+
+CANONICAL_CURRENCY: dict[str, str] = {"tp": "TP", "yp": "YP", "toplam": "Toplam"}
+
+
+def canonical_scope(raw: str) -> str:
+    """One spelling for a bank-group scope. Unknown values pass through unchanged, so a
+    group BDDK adds later is visible rather than silently renamed to something wrong."""
+    return CANONICAL_SCOPE.get(turkish_casefold(str(raw).strip()), str(raw).strip())
+
+
+def canonical_currency(raw: str) -> str:
+    return CANONICAL_CURRENCY.get(turkish_casefold(str(raw).strip()), str(raw).strip())
 
 
 @dataclass(frozen=True)
@@ -425,7 +458,7 @@ def iter_bddk_haftalik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 raw_label=bits["raw_label"],
                 measure_type=measure,
                 statement_kind=statement,
-                currency_basis=col,
+                currency_basis=canonical_currency(col),
                 unit_raw=bits["unit_raw"],
                 unit_normalized=unit_norm,
                 scale_factor=scale,
@@ -490,7 +523,7 @@ def iter_bddk_finturk(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 raw_label=col,
                 measure_type=measure,
                 statement_kind=statement,
-                sector_scope=group,
+                sector_scope=canonical_scope(group),
                 province=None if province.upper() == "HEPSİ" else province,
                 unit_raw=column_unit or bits["unit_raw"],
                 unit_normalized=unit_norm,
@@ -629,6 +662,9 @@ def to_frames(pairs: list[tuple[SeriesMeta, pd.Series]]) -> tuple[pd.DataFrame, 
     """Catalog rows and long-format observations, ready for DuckDB."""
     catalog, observations = [], []
     for meta, s in pairs:
+        # Counted before the row is written, not after: a series published as 0.0 every
+        # month looks as well-covered as any other under `observations` alone.
+        meta.nonzero_observations = int((s.notna() & (s != 0)).sum())
         catalog.append(
             {
                 "series_id": meta.series_id,
@@ -652,6 +688,7 @@ def to_frames(pairs: list[tuple[SeriesMeta, pd.Series]]) -> tuple[pd.DataFrame, 
                 "coverage_start": meta.coverage_start,
                 "coverage_end": meta.coverage_end,
                 "observations": meta.observations,
+                "nonzero_observations": meta.nonzero_observations,
                 "retrieved_at": meta.retrieved_at,
                 "source_hash": meta.source_hash,
                 "notes": meta.notes,
