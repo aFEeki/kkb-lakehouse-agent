@@ -47,10 +47,51 @@ GOLD = ROOT / "data" / "gold" / "lakehouse.duckdb"
 EVDS_CONFIG = ROOT / "config" / "evds-series.json"
 
 
+# Checks the built catalog has to pass. Each compares the data against its own published
+# arithmetic rather than against what we expected, and each exits non-zero on breach.
+#
+# They run after the build, not before: a catalog that fails one is still written, because
+# seeing the broken numbers is how you diagnose it. What the gate changes is the exit
+# code, so nothing downstream treats a failed build as a good one.
+INVARIANT_CHECKS = [
+    ("de-cumulation closes (I1)", "check_decumulation.py"),
+    ("bank-group partitions (I6)", "check_taraf_partitions.py"),
+    ("FinTürk units (I4)", "check_finturk_units.py"),
+]
+
+
+def run_checks(root: Path) -> int:
+    """Run every invariant check. Returns the number that failed."""
+    import subprocess
+
+    failed = 0
+    print(f"\n{'=' * 72}\ninvariants")
+    for title, script in INVARIANT_CHECKS:
+        path = root / "scripts" / script
+        if not path.exists():
+            print(f"   SKIP  {title:<32} ({script} missing)")
+            continue
+        proc = subprocess.run(
+            [sys.executable, str(path)], capture_output=True, text=True, cwd=str(root)
+        )
+        ok = proc.returncode == 0
+        failed += not ok
+        print(f"   {'ok  ' if ok else 'FAIL'}  {title}")
+        if not ok:
+            for line in (proc.stdout or proc.stderr).strip().splitlines()[-12:]:
+                print(f"         {line}")
+    return failed
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=GOLD)
     ap.add_argument("--show", type=int, default=10)
+    ap.add_argument(
+        "--no-check",
+        action="store_true",
+        help="write the catalog without running the invariant checks",
+    )
     a = ap.parse_args()
 
     t0 = time.time()
@@ -146,6 +187,16 @@ def main() -> int:
         print(f"   {r[0][:46]:<46} {str(r[2]):<10} {r[3]:<6} {r[4]:<5} {r[5]} n={r[6]}")
 
     con.close()
+
+    if a.no_check:
+        print("\n--no-check: invariants not run. The catalog is unverified.")
+        return 0
+
+    failed = run_checks(ROOT)
+    if failed:
+        print(f"\n{failed} invariant(s) FAILED. The catalog is written but must not be served.")
+        return 1
+    print("\nall invariants hold.")
     return 0
 
 
