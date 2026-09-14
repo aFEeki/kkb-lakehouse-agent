@@ -2,19 +2,36 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
+import duckdb
 import pytest
 from fastapi.testclient import TestClient
 
-from kkb_agent.api.contracts import AskRequest
-from kkb_agent.api.main import create_app
+from kkb_agent.api.contracts import STREAM_EVENT_ADAPTER, AskRequest
+from kkb_agent.api.frame_store import AnalysisFrameStore
+from kkb_agent.api.main import _turn1_catalog_ready, create_app
 from kkb_agent.api.turn1_runner import TurnOneAskRunner
+from kkb_agent.catalog.schema import CATALOG_DDL, OBSERVATIONS_DDL
+from kkb_agent.frame import AnalysisFrame, Spine
 
 GOLD = Path(__file__).resolve().parents[3] / "data" / "gold" / "lakehouse.duckdb"
-needs_catalog = pytest.mark.skipif(not GOLD.exists(), reason="gold catalog not built")
+needs_catalog = pytest.mark.skipif(
+    not _turn1_catalog_ready(GOLD), reason="populated gold catalog not built"
+)
 
 QUESTION = "Konut kredisi faizleri düştüğü halde kredi hacmi neden artmadı?"
+
+
+def _parse_sse(response):
+    return tuple(
+        STREAM_EVENT_ADAPTER.validate_json(
+            next(line[6:] for line in block.splitlines() if line.startswith("data: "))
+        )
+        for block in response.text.strip().split("\n\n")
+    )
 
 
 async def collect(runner, question: str = QUESTION, version: int = 0):
@@ -82,14 +99,12 @@ class TestTheStream:
 
 
 @needs_catalog
-def test_a_different_question_is_answered_but_the_substitution_is_disclosed():
-    """Turn 1 answers one published question. Returning its findings for a question about
-    something else without saying so would be the worst of both options."""
+def test_an_unrelated_initial_question_is_refused():
     import asyncio
 
     events = asyncio.run(collect(TurnOneAskRunner(GOLD), question="Mevduat faizleri nedir?"))
-    answer = next(e for e in events if e.type == "result").payload.answer
-    assert "yalnızca şu soruyu yanıtlıyor" in answer
+    assert [event.type for event in events] == ["error", "completion"]
+    assert events[0].payload.code == "UNSUPPORTED_PUBLISHED_TURN"
 
 
 class TestAppWiring:
@@ -106,6 +121,23 @@ class TestAppWiring:
         assert response.status_code == 200
         assert "event: error" in response.text
         assert "event: completion" in response.text
+
+    def test_an_empty_duckdb_does_not_count_as_ready(self, tmp_path):
+        from kkb_agent.api.main import _turn1_catalog_ready
+
+        database = tmp_path / "empty.duckdb"
+        duckdb.connect(str(database)).close()
+        assert _turn1_catalog_ready(database) is False
+
+    def test_empty_required_tables_do_not_count_as_ready(self, tmp_path):
+        from kkb_agent.api.main import _turn1_catalog_ready
+
+        database = tmp_path / "unpopulated.duckdb"
+        connection = duckdb.connect(str(database))
+        connection.execute(CATALOG_DDL)
+        connection.execute(OBSERVATIONS_DDL)
+        connection.close()
+        assert _turn1_catalog_ready(database) is False
 
     @needs_catalog
     def test_ask_streams_server_sent_events(self):
@@ -127,3 +159,197 @@ class TestAppWiring:
         ]
         assert types[0] == "stage_start"
         assert types[-2:] == ["result", "completion"]
+
+
+def test_runner_passes_request_identity_to_the_frame():
+    import asyncio
+
+    frame = AnalysisFrame(frame_id="t", spine=Spine(values=[]))
+    fake_result = type(
+        "Result",
+        (),
+        {"frame": frame, "caveats": (), "planned_by": "script", "plan": ()},
+    )()
+    store = AnalysisFrameStore()
+    with patch("kkb_agent.api.turn1_runner.build_turn1", return_value=fake_result) as build:
+        events = asyncio.run(
+            collect(TurnOneAskRunner("unused.duckdb", frame_store=store), question=QUESTION)
+        )
+
+    assert build.call_args.kwargs["frame_id"] == "t"
+    result = next(event for event in events if event.type == "result")
+    assert result.analysis_id == result.payload.frame.frame_id == "t"
+    assert store.get("t", result.frame_version) == result.payload.frame
+
+
+def test_runner_rejects_unknown_continuation_version_without_starting_work():
+    import asyncio
+
+    with patch("kkb_agent.api.turn1_runner.build_turn1") as build:
+        events = asyncio.run(collect(TurnOneAskRunner("unused.duckdb"), version=1))
+
+    build.assert_not_called()
+    assert [event.type for event in events] == ["error", "completion"]
+    assert events[0].payload.code == "ANALYSIS_VERSION_NOT_FOUND"
+    assert events[0].payload.retryable is False
+    assert {event.frame_version for event in events} == {1}
+
+
+def test_a_stage_started_before_failure_is_closed_and_error_is_sanitized(tmp_path):
+    import asyncio
+
+    database = tmp_path / "broken.duckdb"
+    duckdb.connect(str(database)).close()
+    events = asyncio.run(collect(TurnOneAskRunner(database)))
+
+    assert [event.type for event in events] == [
+        "stage_start",
+        "tool_selected",
+        "stage_end",
+        "error",
+        "completion",
+    ]
+    assert events[0].payload.stage == events[2].payload.stage == "data_discovery"
+    assert events[2].payload.outcome == "failed"
+    assert events[3].payload.code == "TURN_ONE_FAILED"
+    assert "series_catalog" not in events[3].payload.user_message
+    assert events[-1].payload.outcome == "failed"
+
+
+def _three_turn_catalog(path):
+    connection = duckdb.connect(str(path))
+    connection.execute(CATALOG_DDL)
+    connection.execute(OBSERVATIONS_DDL)
+    rows = (
+        (
+            "bddk_aylik.t04.taraf10001.t_ketici_kredileri_konut",
+            "bddk_aylik",
+            "Konut Kredileri",
+            "stock",
+            "Milyon TL",
+            "TRY",
+            "M",
+            "period_end",
+        ),
+        ("evds.TP.KTF12", "evds", "Konut Kredisi Faizi", "rate", "%", "%", "W", "mean"),
+        (
+            "evds.TP.GENENDEKS.T1",
+            "evds",
+            "Tüketici Fiyat Endeksi TÜFE",
+            "index",
+            "Endeks",
+            "index",
+            "M",
+            "period_end",
+        ),
+        (
+            "evds.TP.KFE.TR",
+            "evds",
+            "Konut Fiyat Endeksi KFE",
+            "index",
+            "Endeks",
+            "index",
+            "M",
+            "period_end",
+        ),
+    )
+    for series_id, source, name, measure, raw_unit, unit, frequency, aggregation in rows:
+        connection.execute(
+            "INSERT INTO series_catalog (series_id, source, source_ref, name_tr, raw_label, "
+            "measure_type, sector_scope, currency_basis, unit_raw, unit_normalized, "
+            "scale_factor, cumulative_mode, native_freq, aggregation_rule, observations, "
+            "nonzero_observations, source_hash) VALUES (?, ?, ?, ?, ?, ?, 'Sektör', "
+            "'Toplam', ?, ?, 1, 'none', ?, ?, 60, 60, ?)",
+            [
+                series_id,
+                source,
+                series_id,
+                name,
+                name,
+                measure,
+                raw_unit,
+                unit,
+                frequency,
+                aggregation,
+                "a" * 64,
+            ],
+        )
+    for index in range(60):
+        period = date(2021 + index // 12, index % 12 + 1, 1)
+        rate = 20 + index if index < 48 else 68 - (index - 47)
+        for series_id, value in (
+            (rows[0][0], 100 + index),
+            (rows[1][0], rate),
+            (rows[2][0], 100 + index),
+            (rows[3][0], 80 + index),
+        ):
+            connection.execute(
+                "INSERT INTO series_observations VALUES (?, ?, ?, ?)",
+                [series_id, period, value, value],
+            )
+    connection.close()
+
+
+def test_real_three_request_api_flow_uses_one_store(tmp_path):
+    from kkb_agent.agent.turn1 import BALANCE_KEY, RATE_KEY
+    from kkb_agent.agent.turn2 import CPI_KEY
+    from kkb_agent.agent.turn2 import QUESTION as TURN_TWO_QUESTION
+    from kkb_agent.agent.turn3 import HPI_KEY
+    from kkb_agent.agent.turn3 import QUESTION as TURN_THREE_QUESTION
+    from kkb_agent.config import Settings
+
+    database = tmp_path / "three-turn.duckdb"
+    _three_turn_catalog(database)
+    app = create_app(Settings(duckdb_path=database))
+    analysis_id = "three-turn-fixture"
+    with TestClient(app) as client:
+        first = _parse_sse(
+            client.post(
+                "/ask", json={"analysis_id": analysis_id, "version": 0, "question": QUESTION}
+            )
+        )
+        frame1 = next(event.payload.frame for event in first if event.type == "result")
+        unrelated = _parse_sse(
+            client.post(
+                "/ask",
+                json={
+                    "analysis_id": analysis_id,
+                    "version": frame1.version,
+                    "question": "Mevduat faizleri hakkında ne düşünüyorsun?",
+                },
+            )
+        )
+        assert [event.type for event in unrelated] == ["error", "completion"]
+        assert unrelated[0].payload.code == "UNSUPPORTED_PUBLISHED_TURN"
+        assert unrelated[-1].frame_version == frame1.version
+        second = _parse_sse(
+            client.post(
+                "/ask",
+                json={
+                    "analysis_id": analysis_id,
+                    "version": frame1.version,
+                    "question": TURN_TWO_QUESTION,
+                },
+            )
+        )
+        frame2 = next(event.payload.frame for event in second if event.type == "result")
+        third = _parse_sse(
+            client.post(
+                "/ask",
+                json={
+                    "analysis_id": analysis_id,
+                    "version": frame2.version,
+                    "question": TURN_THREE_QUESTION,
+                },
+            )
+        )
+        frame3 = next(event.payload.frame for event in third if event.type == "result")
+
+    assert [column.key for column in frame1.columns] == [BALANCE_KEY, RATE_KEY]
+    assert (frame1.version, frame2.version, frame3.version) == (2, 4, 5)
+    assert frame2.columns[:2] == frame1.columns and frame2.columns[2].key == CPI_KEY
+    assert frame3.columns[:-1] == frame2.columns and frame3.columns[-1].key == HPI_KEY
+    assert frame3.spine == frame2.spine == frame1.spine
+    assert frame3.findings[-1].supersedes == "f-decline"
+    assert frame3.findings[-1].spine_range is not None
+    assert [event.type for event in third[-2:]] == ["result", "completion"]

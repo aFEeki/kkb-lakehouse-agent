@@ -41,6 +41,13 @@ class AskRequest(APIContract):
     version: Version
     question: Annotated[str, Field(strict=True, min_length=1, pattern=r"\S")]
 
+    @field_validator("analysis_id")
+    @classmethod
+    def reject_sse_framing_characters(cls, value: str) -> str:
+        if "\r" in value or "\n" in value:
+            raise ValueError("analysis_id must not contain CR or LF characters")
+        return value
+
 
 class StageStartPayload(APIContract):
     stage: StageName

@@ -150,3 +150,10 @@ def test_ask_request_requires_exact_nonnegative_version_and_closed_shape():
         AskRequest.model_validate(valid | {"version": -1})
     with pytest.raises(ValidationError):
         AskRequest.model_validate(valid | {"internal": "not allowed"})
+
+
+@pytest.mark.parametrize("analysis_id", ["safe\ninjected", "safe\rinjected"])
+def test_ask_request_rejects_sse_framing_in_analysis_id(analysis_id):
+    valid = load_ask_request().model_dump()
+    with pytest.raises(ValidationError, match="CR or LF"):
+        AskRequest.model_validate(valid | {"analysis_id": analysis_id})

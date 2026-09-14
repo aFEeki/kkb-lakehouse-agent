@@ -5,10 +5,9 @@
 The trap in this question is that it contains a false premise and a definitional slip, and
 an answer that repeats either of them back sounds fluent and is wrong.
 
-**Volume did rise - in lira.** Housing loan balances more than tripled over the window.
-Saying "it did not rise" would be false. Saying "it rose" without saying in what would be
-worse, because inflation over the same period was larger, so in constant prices the balance
-*fell*. That is the actual answer, and it is a computation, not a reading of a chart.
+**Volume did rise - in lira.** Housing loan balances are tested over the full window and
+over the period in which rates fell. Turn 1 reports that nominal comparison from computed
+frame values. Inflation adjustment deliberately remains Turn 2.
 
 **The question says hacim - volume - and we do not have volume.** No source publishes
 *kullandırılan*, gross new lending. What we have is the balance outstanding, which moves
@@ -35,14 +34,12 @@ import duckdb
 
 from kkb_agent.agent.composition import create_operation_executor
 from kkb_agent.agent.findings import create_finding
-from kkb_agent.agent.handlers import DEFLATION_CONVENTION, deflated_column_key
 from kkb_agent.catalog.retrieval import Concept, build_concepts
 from kkb_agent.catalog.series_resolver import SeriesResolution, resolve_series
 from kkb_agent.catalog.series_source import CatalogSeriesSource
 from kkb_agent.frame import (
     AddColumnParameters,
     AnalysisFrame,
-    DeflateColumnParameters,
     Operation,
     OperationType,
     Spine,
@@ -94,7 +91,6 @@ def resolved_context(available: dict[str, str], frame: Frame, spine_label: str) 
     lines += [f"  {series_id} -> {key}" for key, series_id in available.items()]
     lines.append(f"Mevcut sütunlar: {[c.key for c in frame.columns] or 'yok'}")
     lines.append(f"Eksen: {spine_label}")
-    lines.append(f"Deflasyon sözleşmesi: {DEFLATION_CONVENTION}")
     return "\n".join(lines)
 
 
@@ -109,7 +105,6 @@ PLAN_ATTEMPTS = 3
 
 BALANCE_KEY = "konut_kredisi_bakiye"
 RATE_KEY = "konut_kredisi_faizi"
-CPI_KEY = "tufe"
 
 # The published question, verbatim. It is what the planner is asked to plan for, so it
 # lives beside the series questions rather than only in the runner script.
@@ -118,10 +113,7 @@ QUESTION = "Konut kredisi faizleri düştüğü halde kredi hacmi neden artmadı
 BALANCE_QUESTION = "konut kredisi"
 RATE_QUESTION = "konut kredisi faizi"
 
-# TÜFE is asked for by code rather than by question. Every other column is resolved from
-# Turkish text, but the deflator is a convention (DECISIONS #9), not something the user
-# asked about, and picking it by retrieval would make the deflation depend on phrasing.
-CPI_SERIES_ID = "evds.TP.GENENDEKS.T1"
+RATE_SERIES_ID = "evds.TP.KTF12"
 
 CATALOG_COLUMNS = (
     "series_id, source, raw_label, name_tr, measure_type, unit_raw, unit_normalized, "
@@ -184,6 +176,29 @@ def _spine_periods(
     )
 
 
+class TurnOneSpineError(RuntimeError):
+    """The selected balance cannot support the published complete monthly window."""
+
+
+def _expected_months(start: date, end: date) -> tuple[date, ...]:
+    months = []
+    current = date(start.year, start.month, 1)
+    final = date(end.year, end.month, 1)
+    while current <= final:
+        months.append(current)
+        current = date(current.year + (current.month == 12), current.month % 12 + 1, 1)
+    return tuple(months)
+
+
+def _validate_published_spine(periods: tuple[date, ...], start: date, end: date) -> None:
+    expected = _expected_months(start, end)
+    if periods != expected or len(periods) != 60:
+        raise TurnOneSpineError(
+            "Turn 1 requires exactly 60 contiguous monthly observations from "
+            "2021-01 through 2025-12"
+        )
+
+
 def _add(executor, frame: Frame, series_id: str, column_key: str) -> Frame:
     return executor.execute(
         frame,
@@ -191,25 +206,6 @@ def _add(executor, frame: Frame, series_id: str, column_key: str) -> Frame:
             operation_id=f"add-{column_key}",
             kind=OperationType.ADD_COLUMN,
             parameters=AddColumnParameters(series_reference=series_id, column_key=column_key),
-            timestamp=datetime.now(UTC),
-            source_version=frame.version,
-            resulting_version=frame.version + 1,
-        ),
-    )
-
-
-def _deflate(executor, frame: Frame, column_key: str, base: date) -> Frame:
-    return executor.execute(
-        frame,
-        Operation(
-            operation_id=f"deflate-{column_key}",
-            kind=OperationType.DEFLATE_COLUMN,
-            parameters=DeflateColumnParameters(
-                column_key=column_key,
-                deflator_column_key=CPI_KEY,
-                base_date=base,
-                convention_reference=DEFLATION_CONVENTION,
-            ),
             timestamp=datetime.now(UTC),
             source_version=frame.version,
             resulting_version=frame.version + 1,
@@ -250,25 +246,24 @@ def _op_target(operation: FrameOperation) -> str:
 def _unmet(frame: Frame) -> tuple[str, ...]:
     """What the answer needs that this plan did not produce.
 
-    The model is free to plan, but the turn asserts its own preconditions. Sampled plans
-    vary - across six runs the same question produced 2, 3, 4 and 6 operations - and a
-    plan that skips the deflation still executes cleanly while quietly costing the
-    real-terms finding, which is the entire answer. Better to notice and re-plan than to
-    answer a smaller question than the one asked.
+    The model is free to plan, but Turn 1 permits only the two source columns. CPI and
+    deflation belong to Turn 2 and must not leak into this frame early.
     """
     keys = {c.key for c in frame.columns}
-    missing = [key for key in (BALANCE_KEY, RATE_KEY) if key not in keys]
-    if not any("deflated_by" in key for key in keys):
-        missing.append("deflasyon")
-    return tuple(missing)
+    problems = [key for key in (BALANCE_KEY, RATE_KEY) if key not in keys]
+    if keys != {BALANCE_KEY, RATE_KEY}:
+        problems.append("Turn 1 dışı sütun")
+    if any(operation.kind != OperationType.ADD_COLUMN for operation in frame.operations):
+        problems.append("Turn 1 dışı işlem")
+    return tuple(problems)
 
 
-def _scripted_plan(executor, frame: Frame, available: dict[str, str], base: date) -> Frame:
+def _scripted_plan(executor, frame: Frame, available: dict[str, str]) -> Frame:
     """The fixed plan. Runs when no planner is supplied, so the demo survives MIA being
     unreachable and the tests never make a network call."""
     for key, series_id in available.items():
         frame = _add(executor, frame, series_id, key)
-    return _deflate(executor, frame, BALANCE_KEY, base)
+    return frame
 
 
 def _planned(
@@ -276,7 +271,6 @@ def _planned(
     make_executor,
     frame: Frame,
     available: dict[str, str],
-    periods: tuple[date, ...],
     question: str,
 ) -> tuple[Frame, str, tuple[str, ...]]:
     """Let the model choose the operations; execute only what validates.
@@ -308,11 +302,8 @@ def _planned(
                 empty.version,
                 series_references=list(available.values()),
                 column_keys=list(available),
-                conventions=[DEFLATION_CONVENTION],
-                # The base period is a convention (DECISIONS #9), not a choice. Left free,
-                # the model picked an arbitrary date, which produced a correctly deflated
-                # column under a key the answer was not looking for.
-                base_dates=[periods[0].isoformat()],
+                conventions=[],
+                base_dates=[],
             )
         except Exception as exc:  # a planner failure is recoverable; a wrong number is not
             attempts.append(f"{attempt + 1}: planner failed ({type(exc).__name__})")
@@ -339,7 +330,7 @@ def _planned(
         return built, "planner", planned
 
     return (
-        _scripted_plan(make_executor(), empty, available, periods[0]),
+        _scripted_plan(make_executor(), empty, available),
         "script (" + "; ".join(attempts) + ")",
         planned,
     )
@@ -399,6 +390,7 @@ def build_turn1(
     *,
     start: date = WINDOW_START,
     end: date = WINDOW_END,
+    frame_id: str = "turn1",
     planner: Planner | None = None,
     on_stage: StageCallback | None = None,
 ) -> TurnResult:
@@ -444,62 +436,65 @@ def build_turn1(
                 raise RuntimeError("turn 1 could not resolve both of its series")
 
         balance_id, rate_id = balance.series_ids[0], rate.series_ids[0]
+        if rate_id != RATE_SERIES_ID:
+            raise RuntimeError(
+                f"turn 1 requires published rate series {RATE_SERIES_ID}, resolved {rate_id}"
+            )
 
         # The balance defines the spine: it is the monthly series, and the rate is weekly
         # and will be collapsed onto it. Building the spine from the rate instead would
         # give a weekly axis the balance cannot fill.
         with stage("data_preparation"):
             periods = _spine_periods(connection, balance_id, start, end)
-            if not periods:
-                raise RuntimeError(f"no {balance_id} observations between {start} and {end}")
-            frame = Frame(frame_id="turn1", spine=Spine(values=periods, label="Dönem"))
+            _validate_published_spine(periods, start, end)
+            frame = Frame(frame_id=frame_id, spine=Spine(values=periods, label="Dönem"))
 
         available = {
             BALANCE_KEY: balance_id,
             RATE_KEY: rate_id,
-            CPI_KEY: CPI_SERIES_ID,
         }
 
         with stage("agentic_analytics"):
             if planner is None:
-                frame = _scripted_plan(executor, frame, available, periods[0])
+                frame = _scripted_plan(executor, frame, available)
                 planned_by, plan = "script", _plan_summary(frame)
             else:
                 frame, planned_by, plan = _planned(
-                    planner, make_executor, frame, available, periods, QUESTION
+                    planner, make_executor, frame, available, QUESTION
                 )
 
-        real_key = deflated_column_key(BALANCE_KEY, CPI_KEY, periods[0])
-        analysis = stage("analysis")
-        analysis.__enter__()
-        rate_column = next(c for c in frame.columns if c.key == RATE_KEY)
-        decline = find_decline_window(rate_column.values)
-
-        evidence = [
-            e
-            for e in (
-                _evidence(frame, RATE_KEY, "Faiz, tüm dönem (%)", scale=False),
-                _evidence(frame, BALANCE_KEY, "Nominal bakiye, tüm dönem (TL)"),
-                _evidence(frame, real_key, "Reel bakiye, tüm dönem (TL)"),
-            )
-            if e is not None
-        ]
-        if decline is not None:
-            evidence += [
+        with stage("analysis"):
+            rate_column = next(c for c in frame.columns if c.key == RATE_KEY)
+            decline = find_decline_window(rate_column.values)
+            evidence = [
                 e
                 for e in (
-                    _evidence(frame, RATE_KEY, "Faiz, düşüş dönemi (%)", scale=False, span=decline),
-                    _evidence(
-                        frame, BALANCE_KEY, "Nominal bakiye, düşüş dönemi (TL)", span=decline
-                    ),
-                    _evidence(frame, real_key, "Reel bakiye, düşüş dönemi (TL)", span=decline),
-                    _evidence(frame, CPI_KEY, "TÜFE, düşüş dönemi", scale=False, span=decline),
+                    _evidence(frame, RATE_KEY, "Faiz, tüm dönem (%)", scale=False),
+                    _evidence(frame, BALANCE_KEY, "Nominal bakiye, tüm dönem (TL)"),
                 )
                 if e is not None
             ]
-
-        frame = _findings(frame, tuple(evidence), real_key, periods, decline)
-        analysis.__exit__(None, None, None)
+            if decline is not None:
+                evidence += [
+                    e
+                    for e in (
+                        _evidence(
+                            frame,
+                            RATE_KEY,
+                            "Faiz, düşüş dönemi (%)",
+                            scale=False,
+                            span=decline,
+                        ),
+                        _evidence(
+                            frame,
+                            BALANCE_KEY,
+                            "Nominal bakiye, düşüş dönemi (TL)",
+                            span=decline,
+                        ),
+                    )
+                    if e is not None
+                ]
+            frame = _findings(frame, tuple(evidence), periods, decline, rate_id)
 
         with stage("verification"):
             caveats = _caveats(frame, balance, rate)
@@ -520,9 +515,9 @@ def build_turn1(
 def _findings(
     frame: Frame,
     evidence: tuple[Evidence, ...],
-    real_key: str,
     periods: tuple[date, ...],
     decline: tuple[int, int] | None,
+    rate_series_id: str,
 ) -> Frame:
     """Turn the computed comparisons into findings. Every number comes from the frame."""
     by = {e.label: e for e in evidence}
@@ -542,42 +537,29 @@ def _findings(
             ),
             supporting_column_keys=(RATE_KEY,),
             producing_tool="turn1.arithmetic",
-            caveats=(
-                "Oran TP.KTF12: yeni kullandırılan TL konut kredilerinin haftalık ağırlıklı "
-                "ortalama faizi (akım). Mevcut stokun faizi değildir.",
-                "Haftalık seri aylık eksene ortalama alınarak indirgendi.",
-            ),
+            caveats=_rate_caveats(rate_series_id),
         )
 
     # 2. The premise does hold for the window after the peak, so answer that question.
     faiz_dec = by.get("Faiz, düşüş dönemi (%)")
     nominal_dec = by.get("Nominal bakiye, düşüş dönemi (TL)")
-    real_dec = by.get("Reel bakiye, düşüş dönemi (TL)")
-    cpi_dec = by.get("TÜFE, düşüş dönemi")
-    if decline is not None and faiz_dec and nominal_dec and real_dec and cpi_dec:
+    if decline is not None and faiz_dec and nominal_dec:
         window = f"{periods[decline[0]]:%Y-%m} - {periods[decline[1]]:%Y-%m}"
-        flat = abs(real_dec.change_pct or 0) < 2
-        shape = (
-            "yatay kaldı" if flat else ("büyüdü" if (real_dec.change_pct or 0) > 0 else "küçüldü")
-        )
         frame = create_finding(
             frame,
             finding_id="f-decline",
             statement=(
                 f"Faizin gerilediği {window} döneminde ({faiz_dec.first:.2f}% -> "
                 f"{faiz_dec.last:.2f}%, {faiz_dec.change_abs:+.2f} puan) bakiye nominal "
-                f"olarak %{nominal_dec.change_pct:+.0f} arttı; ancak TÜFE aynı dönemde "
-                f"%{cpi_dec.change_pct:+.0f} arttı. Sabit fiyatlarla bakiye "
-                f"%{real_dec.change_pct:+.1f} ile {shape}. Yani faiz düşüşü kredi "
-                "kullanımını reel olarak büyütmedi; nominal artışın tamamına yakını "
-                "enflasyondur."
+                f"olarak %{nominal_dec.change_pct:+.0f} değişti. Bu Turn 1 sonucu nominal "
+                "bakiyeyi gösterir; enflasyondan arındırma Turn 2 kapsamındadır."
             ),
-            supporting_column_keys=(RATE_KEY, BALANCE_KEY, real_key, CPI_KEY),
+            supporting_column_keys=(RATE_KEY, BALANCE_KEY),
             producing_tool="turn1.arithmetic",
             caveats=(
                 f"Düşüş dönemi hesaplanarak bulundu: faizin zirvesi "
                 f"{periods[decline[0]]:%Y-%m}, son gözlem {periods[decline[1]]:%Y-%m}.",
-                f"Deflasyon: {DEFLATION_CONVENTION}, baz {periods[0]:%Y-%m}.",
+                "Bu aşamada reel/deflate edilmiş kredi kolonu üretilmedi.",
             ),
         )
 
@@ -596,6 +578,15 @@ def _findings(
         caveats=("DECISIONS #10; 53.792 EVDS serisi arandı, akım serisi bulunamadı.",),
     )
     return frame
+
+
+def _rate_caveats(rate_series_id: str) -> tuple[str, str]:
+    """Describe the series actually resolved; never substitute a hardcoded identifier."""
+    return (
+        f"Oran {rate_series_id}: yeni kullandırılan TL konut kredilerinin haftalık "
+        "ağırlıklı ortalama faizi (akım). Mevcut stokun faizi değildir.",
+        "Haftalık seri aylık eksene ortalama alınarak indirgendi.",
+    )
 
 
 def _caveats(frame: Frame, balance: SeriesResolution, rate: SeriesResolution) -> tuple[str, ...]:
