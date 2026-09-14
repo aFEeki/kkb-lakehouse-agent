@@ -133,13 +133,26 @@ def test_every_committed_series_states_a_unit():
     """A series whose unit we cannot state is refused by is_usable(), so shipping one in
     the config spends requests to produce a row nothing may serve.
 
-    TP.KKM.K4 is the documented exception: its datagroup publishes no BIRIMI and its note
-    does not say, so it is carried without one rather than given a guessed unit.
+    There is no longer an exception. TP.KKM.K4 was one until its unit turned out to be
+    published in the series name - "2. TL KKM - Toplam (milyar TL)" - rather than in the
+    datagroup's BIRIMI field, which is the only place the lookup had been checking.
     """
     config = load_curated_config(ROOT / "config" / "evds-series.json")
     without = {s.code for s in config.series if not s.unit}
 
-    assert without == {"TP.KKM.K4"}
+    assert without == set()
+
+
+def test_the_unit_read_from_a_series_name_is_the_published_one():
+    """EVDS states the unit in the name when the datagroup leaves BIRIMI blank.
+
+    Worth pinning: milyar TL against bin TL is a factor of a million, and the magnitude
+    alone does not distinguish them - 1,061.20 is a plausible-looking number either way.
+    """
+    config = load_curated_config(ROOT / "config" / "evds-series.json")
+    kkm = next(s for s in config.series if s.code == "TP.KKM.K4")
+
+    assert kkm.unit == "milyar TL"
 
 
 @pytest.mark.parametrize(
