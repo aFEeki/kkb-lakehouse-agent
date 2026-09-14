@@ -235,8 +235,32 @@ adjusted or not.
 
 - **Recommend:** pull both flow and stock, label each clearly in the catalog, let the agent
   choose and state which it used.
-- **Decision:**
-- **Owner:**
+- **Decision:** settled by search, not by assumption (SCRUM-99).
+
+  **Gross *kullandırılan* volume does not exist in any source we hold.** The whole EVDS
+  catalogue was walked — 154 categories, 678 datagroups, **53,792 series** — and searched.
+  Six series match the word, and none of them is what the demo means: five are the CBRT's
+  own lending to TMSF and to banks, mostly archived, and the sixth family (`TP.KBK.*`,
+  `TP.KKP.*`) uses "kullandırımlar dahil" as a scope qualifier on a weighted-average
+  **interest rate**. `yeni kredi` matches nothing at all. BDDK's three publications are
+  balances throughout.
+
+  **A net flow does exist, and we now hold it.** TCMB's financial accounts publish loans
+  for households on a transactions basis: `TP.FINHESTNKS61014.ZP34`, *F.4 Krediler,
+  Hanehalkı (Konsolide Akım)*, quarterly, bin TL, 2010-Q4 onward. That is the net
+  incurrence of loan liabilities in the quarter — new lending **minus** repayments. It is
+  strictly better than differencing a BDDK balance, because a financial-accounts
+  transaction excludes revaluation and reclassification, which a stock difference silently
+  includes. The short- and long-maturity splits (`ZP35`, `ZP36`) come with it.
+
+  The asset-side twin `ZP12` is a different series and must not be substituted: it is what
+  households *lend*, which oscillates around zero, against 219–643 bn TL per quarter of
+  borrowing on the liability side.
+
+  So the answer to a *kullandırılan* question is: the net quarterly flow, labelled as
+  **net rather than gross**, alongside the balance — never a balance presented as a flow.
+
+- **Owner:** Alp
 
 ### 11. Ragged edge policy
 

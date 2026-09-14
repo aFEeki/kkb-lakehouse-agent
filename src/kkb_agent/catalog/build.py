@@ -418,6 +418,45 @@ def iter_bddk_finturk(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
         )
 
 
+# EVDS's financial accounts publish the same line twice: as a position at the period end
+# and as the transactions during the period, distinguished only by "(Konsolide Akım)" or
+# "(... Stok)" in the series name. Getting this wrong is the FLOW-versus-STOCK error the
+# whole catalog is built to prevent, and here the source states which it is.
+#
+# Word boundaries matter: "bakım" (maintenance) contains "akım" and appears all over the
+# price indices. \b will not match inside it, a plain substring test will.
+_AKIM = re.compile(r"\bakım\b")
+_STOK = re.compile(r"\bstok\b")
+
+
+def evds_measure(name: str, unit_raw: str) -> MeasureType:
+    """What an EVDS series measures, from its unit first and its name second.
+
+    The unit is the stronger signal because it comes from EVDS's own metadata, while the
+    name is prose. The name settles the two things the unit cannot: whether "Yüzde" is an
+    interest rate, which averages when downsampled, or a ratio, which takes the period
+    end; and whether a money figure is a position or a transaction.
+    """
+    unit = unit_raw.strip().casefold()
+    lowered = name.casefold()
+
+    if unit in COUNT_UNITS:
+        return MeasureType.COUNT
+    if unit.endswith("=100") or unit == "endeks":
+        return MeasureType.INDEX
+    if unit == "yüzde":
+        return MeasureType.RATE if "faiz" in lowered else MeasureType.RATIO
+    if "endeks" in lowered:
+        return MeasureType.INDEX
+    if unit:
+        # The financial accounts say so outright; everything else EVDS publishes in a
+        # money unit is a level.
+        if _AKIM.search(lowered) and not _STOK.search(lowered):
+            return MeasureType.FLOW
+        return MeasureType.STOCK
+    return MeasureType.UNKNOWN
+
+
 def iter_evds(silver: Path, config: Path | None = None) -> Iterator[tuple[SeriesMeta, pd.Series]]:
     """EVDS parquet, with names and frequencies from the committed config."""
     declared: dict[str, dict] = {}
@@ -449,11 +488,12 @@ def iter_evds(silver: Path, config: Path | None = None) -> Iterator[tuple[Series
             continue
         d = declared.get(code, {})
         name = d.get("name", code)
-        is_rate = "faiz" in name.casefold() or "oran" in name.casefold()
-        is_index = "endeks" in name.casefold()
-        measure = (
-            MeasureType.RATE if is_rate else MeasureType.INDEX if is_index else MeasureType.STOCK
-        )
+        # The unit comes from the config, which the metadata walk fills in from the
+        # DATAGROUP's BIRIMI field. Guessing it from the series name is how 14 series
+        # ended up with no unit at all and were refused by is_usable().
+        unit_raw = str(d.get("unit", "")).strip()
+        unit_norm, scale = normalise_unit(unit_raw)
+        measure = evds_measure(name, unit_raw)
         yield (
             SeriesMeta(
                 series_id=f"evds.{code}",
@@ -465,9 +505,10 @@ def iter_evds(silver: Path, config: Path | None = None) -> Iterator[tuple[Series
                 # EVDS publishes levels and rates, not year-to-date accumulations.
                 cumulative_mode=CumulativeMode.NONE,
                 cumulative_evidence="EVDS publishes levels and rates, not accumulations",
-                unit_raw="%" if is_rate else "",
-                unit_normalized="%" if is_rate else "",
-                scale_factor=1.0,
+                unit_raw=unit_raw,
+                unit_normalized=unit_norm,
+                scale_factor=scale,
+                notes=" | ".join(p for p in (d.get("category", ""), d.get("datagroup", "")) if p),
                 native_freq=freq_map.get(d.get("frequency", "monthly"), Frequency.MONTHLY),
                 aggregation_rule=default_aggregation(measure),
                 coverage_start=s.index.min().date(),

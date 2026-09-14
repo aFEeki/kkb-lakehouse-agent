@@ -90,7 +90,29 @@ UNIT_SCALE: dict[str, tuple[str, float]] = {
     "adet": ("adet", 1.0),  # branches, banks, ATMs
     "kişi": ("kişi", 1.0),  # people per branch, population per branch
     "gün": ("gün", 1.0),  # weighted average maturity
+    # EVDS spellings, taken from the datagroup BIRIMI field (SCRUM-99). EVDS writes the
+    # same quantities differently from BDDK and adds foreign currency and index units.
+    "yüzde": ("%", 1.0),
+    # EVDS labels its rate tables by how the figure is computed rather than by its unit.
+    # Checked: all ten datagroups carrying this are "Faiz Oranları" or "Kâr Oranları",
+    # so the figure is a weighted-average rate and the unit is percent.
+    "ağırlıklı ortalama": ("%", 1.0),
+    "türk lirası": ("TRY", 1.0),
+    "abd doları": ("USD", 1.0),
+    "bin abd doları": ("USD", 1_000.0),
+    "milyon abd doları": ("USD", 1_000_000.0),
+    "bin kişi": ("kişi", 1_000.0),
+    "endeks": ("endeks", 1.0),
+    "2003=100": ("endeks", 1.0),
+    "2010=100": ("endeks", 1.0),
+    "2020=100": ("endeks", 1.0),
+    "2021=100": ("endeks", 1.0),
 }
+
+# EVDS units that name two possibilities rather than one - "Yüzde, TL",
+# "bin TL veya yüzde", "TL/kg, USD/ons, Euro/ons, TL/gr". Which applies varies series by
+# series inside the group, so the group cannot tell us. Deliberately absent from
+# UNIT_SCALE: these stay unservable rather than being resolved by a coin flip.
 
 # Units that mean "a number of things". A count is summable across provinces or bank
 # groups; a per-capita or per-branch figure in the same table is not, which is why the

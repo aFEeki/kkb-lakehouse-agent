@@ -40,6 +40,14 @@ class CuratedSeries:
     name: str
     frequency: str
 
+    # Provenance from the EVDS metadata walk (SCRUM-99). Optional so a hand-added code
+    # still loads, but the walk fills them in and the catalog needs `unit`: EVDS carries
+    # the unit on the DATAGROUP, not the series, which is why every series ingested
+    # before the walk had an empty unit and was refused by is_usable().
+    unit: str = ""
+    datagroup: str = ""
+    category: str = ""
+
 
 @dataclass(frozen=True)
 class CuratedEVDSConfig:
@@ -88,6 +96,9 @@ def load_curated_config(path: Path) -> CuratedEVDSConfig:
                 code=str(raw["code"]).strip(),
                 name=str(raw["name"]).strip(),
                 frequency=str(raw["frequency"]).strip().lower(),
+                unit=str(raw.get("unit", "")).strip(),
+                datagroup=str(raw.get("datagroup", "")).strip(),
+                category=str(raw.get("category", "")).strip(),
             )
         except (KeyError, TypeError) as exc:
             raise ValueError("Each series entry requires code, name and frequency") from exc
