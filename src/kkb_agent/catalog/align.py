@@ -60,6 +60,21 @@ _HOW: dict[str, str] = {
 }
 
 
+def infer_spine_frequency(values: tuple[date, ...]) -> str:
+    """Infer one of the catalog frequencies from an ordered date spine."""
+    if len(values) < 2:
+        return Frequency.MONTHLY
+    gaps = sorted({(b - a).days for a, b in zip(values, values[1:], strict=False)})
+    typical = gaps[len(gaps) // 2]
+    if typical <= 3:
+        return Frequency.DAILY
+    if typical <= 10:
+        return Frequency.WEEKLY
+    if typical <= 45:
+        return Frequency.MONTHLY
+    return Frequency.QUARTERLY
+
+
 class UpsampleRefused(ValueError):
     """Raised when a series would have to be expanded into periods it never had."""
 
