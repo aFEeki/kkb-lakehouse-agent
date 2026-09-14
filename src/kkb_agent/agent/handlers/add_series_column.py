@@ -28,7 +28,7 @@ from datetime import date, datetime
 from typing import Protocol
 
 from kkb_agent.agent.executor import OperationExecutionError
-from kkb_agent.catalog.align import SeriesSpec, UpsampleRefused, collapse
+from kkb_agent.catalog.align import SeriesSpec, UpsampleRefused, collapse, infer_spine_frequency
 from kkb_agent.frame import (
     AddColumnParameters,
     AnalysisFrame,
@@ -127,26 +127,6 @@ class SeriesSource(Protocol):
     def fetch(self, series_reference: str) -> LoadedSeries | None: ...
 
 
-def _spine_frequency(values: tuple[date, ...]) -> str:
-    """Infer the spine's frequency from the gap between its periods.
-
-    Read off the spine rather than carried on it, because Spine is a frozen contract
-    owned by another module and widening it for this would be the wrong trade. The gap is
-    unambiguous for the four frequencies the catalog publishes.
-    """
-    if len(values) < 2:
-        return "M"
-    gaps = sorted({(b - a).days for a, b in zip(values, values[1:], strict=False)})
-    typical = gaps[len(gaps) // 2]
-    if typical <= 3:
-        return "D"
-    if typical <= 10:
-        return "W"
-    if typical <= 45:
-        return "M"
-    return "Q"
-
-
 def _unit_for(series: LoadedSeries) -> Unit | None:
     if not series.unit_normalized:
         return None
@@ -224,7 +204,7 @@ def make_add_series_column_handler(source: SeriesSource):
             )
 
         spine_values: tuple[date, ...] = tuple(frame.spine.values)
-        target = _spine_frequency(spine_values)
+        target = infer_spine_frequency(spine_values)
         spec = SeriesSpec(
             series_id=series.series_id,
             name=series.name,
