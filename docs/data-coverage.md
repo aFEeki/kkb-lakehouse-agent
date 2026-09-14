@@ -11,28 +11,58 @@ are gaps, not omissions.
 
 | Source | Status | Coverage |
 |---|---|---|
-| BDDK Aylık Bülten | **acquired** | 2021-01 → 2026-06, 17 tables, Sektör only |
+| BDDK Aylık Bülten | **acquired** | 2021-01 → 2026-06, 17 tables, all 10 sector scopes |
 | BDDK Haftalık Bülten | **acquired** | 2021-01-08 → 2026-06-26, 286 weeks, 9 tables, TL |
-| TCMB EVDS | **first subset acquired** | 22 series, 2021-01 → 2026-06 |
+| TCMB EVDS | **acquired** | 250 series, 2021-01 → 2026-06 |
 | BDDK FinTürk | **acquired** | 2021-03 → 2026-06, 22 quarters, 7 tables, 82 provinces |
 | Live URLs | **not started** | on-demand, no pre-acquisition |
 
 All three BDDK sources required by the organizers are now acquired. They state the
 data *alınacaktır* for 2021-01 to 2026-06.
 
+### What the catalog holds
+
+`data/gold/lakehouse.duckdb`, built from bronze by `scripts/build_catalog.py`:
+
+| | |
+|---|---|
+| Series | **47,015** |
+| Observations | **1,330,275** |
+| Unservable | **1** (`TP.KKM.K4`, no published unit) |
+
+| Source | Series |
+|---|---|
+| BDDK FinTürk | 41,522 |
+| BDDK Aylık | 4,960 |
+| BDDK Haftalık | 283 |
+| TCMB EVDS | 250 |
+
+By measure: 34,454 stock · 11,287 ratio · 619 flow · 618 count · 30 rate · 6 index.
+599 series accumulate year-to-date and carry the de-cumulation rule to prove it.
+
+Three checks run against this, each verifying the data against itself rather than against
+what we expected:
+
+| Check | Scope | Result |
+|---|---|---|
+| `check_taraf_partitions.py` | 83,808 comparisons | 2 of 3 partitions exact, worst 0.257% |
+| `check_finturk_units.py` | 1,782 province-quarters | worst 0.019% |
+| `reconcile_bddk_evds.py` | BDDK ↔ EVDS | three stable offsets |
+
 ---
 
 ## BDDK Aylık Bülten — acquired
 
-Fetched 2026-09-12 in a single 40-minute pass. **1,122 fetches, zero failures.**
+Fetched 2026-09-12 (Sektör) and completed 2026-09-14 (the other nine scopes).
+**11,220 fetches, zero failures.**
 
 | | |
 |---|---|
 | Periods | 66 (2021-01 → 2026-06), no gaps |
 | Tables | 17 of 17 |
-| Sector scope (`taraf`) | Sektör (10001) only |
-| Rows | 33,965 |
-| Raw size | 5.3 MB |
+| Sector scope (`taraf`) | all 10 |
+| Rows | 339,650 |
+| Raw size | 53 MB |
 | Location | `data/bronze/bddk/aylik/` (gitignored) |
 | Manifest | `data/bronze/bddk/manifest_aylik.jsonl` |
 
@@ -72,17 +102,33 @@ rather than data errors:
 which shift when rows are inserted. Display name is therefore not a safe series key — see
 SCRUM-20.
 
-### Not acquired: the other nine sector scopes
+### All ten sector scopes held
 
-`taraf` has ten values. Only **Sektör** (whole sector) is held. The nine outstanding are
-Mevduat, Katılım, Kalkınma ve Yatırım, Yerli Özel, Kamu, Yabancı, and three Mevduat
-sub-splits.
+`taraf` has ten values and all ten are now held: Sektör, Mevduat, Katılım, Kalkınma ve
+Yatırım, Yerli Özel, Kamu, Yabancı, and three Mevduat sub-splits. Questions about a
+specific bank group are answerable.
 
-Deliberate: that is roughly 10,000 further requests, about six hours at the current polite
-delay. It should follow a decision about which sector splits the questions actually need,
-rather than being fetched speculatively. Until then, **any question asking about a specific
-bank group cannot be answered**, and that limitation should be stated rather than
-approximated with sector totals.
+The payload names its own scope in every row's first cell, so the crawler's request
+parameter is checked against what the response says — a report viewer ignoring `taraf`
+would otherwise file one group's figures under another's label.
+
+**The scopes form three partitions, and each must sum to its parent:**
+
+```
+Sektör  = Mevduat + Katılım + Kalkınma ve Yatırım               (by bank type)
+Sektör  = Yerli Özel + Kamu + Yabancı                           (by ownership)
+Mevduat = Mevduat-Yerli Özel + Mevduat-Kamu + Mevduat-Yabancı
+```
+
+This is the strongest integrity check we have, because it needs no second source and no
+assumption about what the numbers should be. `scripts/check_taraf_partitions.py` asserts
+it across 83,808 comparisons; two of the three partitions close exactly on every material
+comparison and the third's worst gap is 0.257%.
+
+It earns its keep. It caught the catalog collapsing all ten scopes into one series
+(SCRUM-98), and then four rows filed inside balance-sheet tables that are actually ratios
+— a ratio does not add across bank groups, so it stands out against an identity every
+genuine balance line satisfies.
 
 ---
 
@@ -172,18 +218,29 @@ unqueryable.
 
 ---
 
-## TCMB EVDS — first subset acquired
+## TCMB EVDS — acquired
 
 Scope declared in `config/evds-series.json`; ingestion in `scripts/ingest_evds_curated.py`.
 Output is one parquet per series under `data/silver/evds/` with a `coverage.json`, both
 gitignored. The committed config is the reproducible declaration of scope.
 
+The selection is no longer hand-listed. `scripts/walk_evds_catalog.py` walks the published
+tree and `scripts/select_evds_series.py` filters it, so the scope can be re-derived and
+argued with rather than taken on trust.
+
 | | |
 |---|---|
-| Series configured | **22** |
-| Frequencies | 13 monthly, 7 weekly, 2 daily |
+| Catalogue walked | **154 categories, 678 datagroups, 53,792 series** |
+| Series configured | **250** |
+| Frequencies | 119 quarterly, 93 monthly, 36 weekly, 2 daily |
 | Requested range | 2021-01-01 → 2026-06-30 |
+| Ingested | 250 of 250, zero failures |
 | Full EVDS catalog | **no** — `is_full_evds_catalog: false` |
+
+**The unit is on the datagroup, not the series.** `BIRIMI` is a datagroup field, which is
+why every non-rate series ingested before the walk had an empty unit and was refused by
+`is_usable()`. 164 of 678 groups publish no unit at all, and a handful name two
+possibilities (`Yüzde, TL`); those are excluded rather than resolved by a coin flip.
 
 ### All three demo-scenario series are present
 
@@ -196,22 +253,50 @@ gitignored. The committed config is the reproducible declaration of scope.
 Plus loan rates by type, FX, reserves, deposits including KKM, banking-sector aggregates,
 and capacity utilisation.
 
-### Two things this subset does not resolve
+### The *kullandırılan* question, answered
+
+**Gross new-lending volume does not exist in any source we hold**, and that is now a
+finding rather than a failure to find. The whole catalogue was searched: six of 53,792
+series match the word, and none is what the demo means — five are the CBRT's own lending
+to TMSF and to banks, mostly archived, and the sixth family uses *kullandırımlar dahil* as
+a scope qualifier on a weighted-average **interest rate**. `yeni kredi` matches nothing.
+BDDK's three publications are balances throughout.
+
+**A net flow does exist, and we hold it.** TCMB's financial accounts publish household
+loans on a transactions basis:
+
+| | |
+|---|---|
+| `TP.FINHESTNKS61014.ZP34` | F.4 Krediler, Hanehalkı (Konsolide Akım) |
+| Frequency | quarterly, bin TL, 2010-Q4 → |
+| What it is | net incurrence of loan liabilities — new lending **minus** repayments |
+
+Better than differencing a BDDK balance, because a financial-accounts transaction excludes
+revaluation and reclassification, which a stock difference silently includes. The maturity
+splits `ZP35` and `ZP36` come with it.
+
+The asset-side twin `ZP12` must not be substituted: it is what households *lend*, which
+oscillates around zero, against 219–643 bn TL per quarter of borrowing on the liability
+side. Pinned by name in the selection and covered by a test.
+
+So a *kullandırılan* question is answered with the net quarterly flow, **labelled as net
+rather than gross**, alongside the balance — never a balance presented as a flow. See
+DECISIONS #10.
+
+### Still outstanding
 
 **The housing loan interest rate is weekly; the demo table is monthly.** Turn 1 needs a
 frequency conversion, and because it is a rate the aggregation rule is mean or period-end,
 never a sum. See SCRUM-26.
 
-**There is still no housing loan *flow* series.** BDDK table 4 gives the balance
-outstanding and EVDS provides the rate, but neither gives *kullandırılan* — new lending
-extended, which is what the published question literally asks for. Decision #10 remains
-open and now has to be answered from what actually exists rather than in the abstract.
+**One series carries no unit.** `TP.KKM.K4` — its datagroup publishes no `BIRIMI` and its
+note does not say. The magnitude is consistent with milyar TL, but consistent is not
+stated, so it is held without a unit and `is_usable()` refuses it. It is the only
+unservable series in the catalog.
 
-### Not acquired
-
-22 series against a planned pool of roughly 250 (DECISIONS #4). The configured `known_gaps`
-records this explicitly. Questions outside the covered categories cannot currently be
-answered, and that should be stated rather than approximated.
+**Topics deliberately out of scope:** international statistics, balance of payments, and
+the CBRT's own balance sheet. Questions reaching into those cannot be answered, and that
+should be stated rather than approximated.
 
 ---
 
