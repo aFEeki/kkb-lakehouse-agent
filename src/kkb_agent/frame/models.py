@@ -139,13 +139,30 @@ class Finding(Contract):
     caveats: tuple[str, ...] = ()
 
 
+class AxisAssignment(Contract):
+    column_key: Identifier
+    axis: Literal["left", "right"]
+
+
 class ChartSpec(Contract):
     chart_id: Identifier
     chart_type: Literal["line", "bar", "scatter"]
     spine_key: Identifier
     column_keys: tuple[Identifier, ...] = Field(min_length=1)
     axis_policy: Literal["by_unit"] = "by_unit"
+    axis_assignments: tuple[AxisAssignment, ...] = ()
+    indexing_recommended: bool = False
     title: str | None = None
+
+    @model_validator(mode="after")
+    def validate_axis_assignments(self):
+        if self.axis_assignments:
+            assigned_keys = tuple(item.column_key for item in self.axis_assignments)
+            if assigned_keys != self.column_keys:
+                raise ValueError(
+                    "Axis assignments must reference every chart column exactly once and in order"
+                )
+        return self
 
 
 class AnalysisFrame(Contract):

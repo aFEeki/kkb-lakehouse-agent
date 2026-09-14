@@ -10,6 +10,7 @@ from kkb_agent.frame.invariants import (
 )
 from kkb_agent.frame.models import (
     AnalysisFrame,
+    AxisAssignment,
     ChartSpec,
     Column,
     Finding,
@@ -33,6 +34,7 @@ from kkb_agent.frame.operations import (
 __all__ = [
     "AddColumnParameters",
     "AnalysisFrame",
+    "AxisAssignment",
     "ChartSpec",
     "Column",
     "ColumnAlignmentViolation",

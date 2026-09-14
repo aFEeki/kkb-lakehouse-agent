@@ -81,9 +81,42 @@
       "title": "AnalysisFrame",
       "type": "object"
     },
+    "AxisAssignment": {
+      "additionalProperties": false,
+      "properties": {
+        "axis": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
+        "column_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Column Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "column_key",
+        "axis"
+      ],
+      "title": "AxisAssignment",
+      "type": "object"
+    },
     "ChartSpec": {
       "additionalProperties": false,
       "properties": {
+        "axis_assignments": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AxisAssignment"
+          },
+          "title": "Axis Assignments",
+          "type": "array"
+        },
         "axis_policy": {
           "const": "by_unit",
           "default": "by_unit",
@@ -114,6 +147,11 @@
           "minItems": 1,
           "title": "Column Keys",
           "type": "array"
+        },
+        "indexing_recommended": {
+          "default": false,
+          "title": "Indexing Recommended",
+          "type": "boolean"
         },
         "spine_key": {
           "minLength": 1,

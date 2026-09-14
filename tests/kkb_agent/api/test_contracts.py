@@ -97,6 +97,11 @@ def test_success_fixture_is_valid_and_covers_all_event_types():
     assert result.payload.frame.columns[0].unit.scale == 1_000_000.0
     assert result.payload.frame.columns[2].lineage.parents[0].column_key == "housing_loans"
     assert result.payload.frame.charts[0].column_keys == ("housing_loans", "housing_rate")
+    assert [item.axis for item in result.payload.frame.charts[0].axis_assignments] == [
+        "left",
+        "right",
+    ]
+    assert result.payload.frame.charts[0].indexing_recommended is False
     assert events[-1].payload.outcome == "succeeded"
     assert any(isinstance(event, ResultEvent) for event in events[:-1])
 

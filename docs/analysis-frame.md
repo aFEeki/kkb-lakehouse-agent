@@ -114,9 +114,12 @@ revision targets, unknown current supporting columns and out-of-range evidence f
 a new frame is returned. The input remains unchanged on every failure.
 
 `ChartSpec` contains chart ID, type (`line`, `bar`, `scatter`), spine key, ordered
-column keys, title and `axis_policy="by_unit"`. References must exist in the current
-frame. Following STACK.md, a future renderer derives axis assignment from column
-units; model-selected arbitrary axes and Plotly rendering are not implemented.
+column keys, title and `axis_policy="by_unit"`. Optional ordered `axis_assignments`
+make the server's left/right decision explicit, and `indexing_recommended` carries a
+recommendation without creating a derived column. Axis assignments, when present,
+must reference every chart column exactly once and in the same order. Existing specs
+without these fields remain valid through empty/false defaults. References must exist
+in the current frame. Plotly rendering is not implemented here.
 
 ## Closed operation vocabulary
 
