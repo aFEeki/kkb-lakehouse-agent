@@ -225,6 +225,11 @@ CREATE TABLE IF NOT EXISTS {CATALOG_TABLE} (
     coverage_end           DATE,
     observations           INTEGER DEFAULT 0,
     nonzero_observations   INTEGER DEFAULT 0,
+    -- Naive on purpose. Both sources stamp UTC (BDDK manifests record "+00:00", the
+    -- EVDS parquet column is tz-aware), and TIMESTAMPTZ would be the truer type - but
+    -- DuckDB's TIMESTAMPTZ to Python conversion requires pytz, a deprecated package we
+    -- would be adding solely for this column. series_source._as_utc re-attaches UTC on
+    -- the way out, where the assumption is stated rather than implied.
     retrieved_at           TIMESTAMP,
     source_hash            VARCHAR,
     notes                  VARCHAR

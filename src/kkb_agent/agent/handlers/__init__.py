@@ -1,5 +1,18 @@
 """Production operation handlers and their domain errors."""
 
+from kkb_agent.agent.handlers.add_series_column import (
+    AddSeriesColumnError,
+    LoadedSeries,
+    SeriesColumnCollisionError,
+    SeriesEmptyError,
+    SeriesFrequencyError,
+    SeriesMeasureError,
+    SeriesNotFoundError,
+    SeriesProvenanceError,
+    SeriesSource,
+    SeriesSpineTypeError,
+    make_add_series_column_handler,
+)
 from kkb_agent.agent.handlers.deflate_column import (
     DEFLATION_CONVENTION,
     DeflateBasePeriodMissingError,
@@ -33,6 +46,17 @@ from kkb_agent.agent.handlers.index_column import (
 
 __all__ = [
     "DEFLATION_CONVENTION",
+    "AddSeriesColumnError",
+    "LoadedSeries",
+    "SeriesColumnCollisionError",
+    "SeriesEmptyError",
+    "SeriesFrequencyError",
+    "SeriesMeasureError",
+    "SeriesNotFoundError",
+    "SeriesProvenanceError",
+    "SeriesSource",
+    "SeriesSpineTypeError",
+    "make_add_series_column_handler",
     "DeflateBasePeriodMissingError",
     "DeflateBasePeriodNotFoundError",
     "DeflateCalculationError",
