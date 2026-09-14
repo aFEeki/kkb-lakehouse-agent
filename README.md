@@ -37,7 +37,7 @@ turda sonucu sıfırdan yeniden üretmez — bkz. [Tasarım kararları](#tasarı
 | **1 · Veri Keşfi & Temini** | BDDK bültenleri ve EVDS serilerinin taranması ve arşivlenmesi. Ham veri, ayrıştırılmadan önce SHA-256 özeti ve çekim zaman damgasıyla saklanır | `ingest/`, `data/bronze/` |
 | **2 · Veri Temizliği & Hizalama** | Kalite ve eksik veri kontrolleri, kümülatif ayrıştırma, birim normalizasyonu, frekans hizalama. Çıktı, her serinin her seriyle birleştirilebildiği tek bir havuzdur | `transform/`, `catalog/`, `data/gold/` |
 | **3 · Agentic Analytics Motoru** | Türkçe soru anlama, anlamsal ve sözcüksel aramanın birlikte kullanıldığı seri çözümleme, araç seçimi, analiz nesnesi üzerinde çok adımlı yürütme | `agent/`, `tools/lakehouse.py` |
-| **4 · Verinin Analiz Edilmesi** | Anomali tespiti, kırılma noktası tespiti ve kırılmaları dikkate alan nedensellik testleri | `tools/anomaly.py`, `tools/change_detection.py`, `tools/causality.py` |
+| **4 · Verinin Analiz Edilmesi** | Anomali tespiti, kırılma noktası tespiti ve kırılmaları dikkate alan nedensellik testleri | `tools/anomaly.py`, `tools/change_detection.py`, `tools/causality/` |
 | **5 · Doğrulama & Sonuç** | Web araması ve doğrudan URL okuma ile teyit; çıktının grafik, tablo veya rapor olarak sunulması | `tools/web_search.py`, `tools/web_url.py`, `api/` |
 
 ### Güven Katmanı

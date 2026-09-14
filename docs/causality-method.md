@@ -137,10 +137,13 @@ observations a 12-lag bivariate VAR is categorically refused. A seasonal lag may
 when the question pre-specifies it, the parameter budget passes and residual diagnostics
 support it.
 
-The selected result is rerun at `p-1` and `p+1` when those orders remain admissible. A sign,
-direction or corrected-significance reversal becomes `limited evidence`. Residual serial
-correlation triggers a higher lag only within the cap and parameter budget; otherwise the
-tool refuses.
+The selected result is rerun at `p-1` and `p+1` when those orders remain admissible. Every
+applicable adjacent order must fit and pass verified diagnostics; a failed or unverified
+applicable check makes robustness unavailable even if another adjacent order passes. A
+change to no direction or bidirectionality is inconclusive. Only an opposite one-way result
+is a directional reversal. Any of these outcomes caps otherwise positive evidence. Residual
+serial correlation triggers a higher lag only within the cap and parameter budget;
+otherwise the tool refuses.
 
 ## 6. Structural-break policy
 
@@ -220,6 +223,8 @@ Return `not identifiable` without a directional p-value when any of these holds:
 - SCRUM-56 finds stable breaks but viable regimes are undersized or disagree in direction.
 - ADF/KPSS integration classification is inconclusive, suggests I(2), or changes under the
   justified break treatment.
+- A required Engle-Granger cointegration test cannot be computed, so the I(1) model branch
+  cannot be selected safely.
 - BIC selects lag zero, the fitted VAR/VECM is unstable, residual serial correlation remains,
   covariance is singular, or lag estimates exceed the parameter budget.
 - Corrected significance, sign or direction is not stable at adjacent admissible lags.
