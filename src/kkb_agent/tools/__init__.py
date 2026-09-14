@@ -16,6 +16,15 @@ from kkb_agent.tools.change_detection import (
     ChangeKind,
     detect_changes,
 )
+from kkb_agent.tools.chart_selection import (
+    DEFAULT_MAGNITUDE_THRESHOLD,
+    ChartSelectionError,
+    ChartSelectionOverride,
+    ChartSelectionRefusalReason,
+    ChartSelectionResult,
+    UnitGroup,
+    select_chart,
+)
 from kkb_agent.tools.url_safety import (
     EncryptedPDFError,
     FileSizeLimitError,
@@ -31,6 +40,7 @@ from kkb_agent.tools.url_safety import (
 )
 
 __all__ = [
+    "DEFAULT_MAGNITUDE_THRESHOLD",
     "DEFAULT_SENSITIVITY",
     "AnomalyAnalysisError",
     "AnomalyParameters",
@@ -41,6 +51,10 @@ __all__ = [
     "ChangeDetectionParameters",
     "ChangeDetectionResult",
     "ChangeKind",
+    "ChartSelectionError",
+    "ChartSelectionOverride",
+    "ChartSelectionRefusalReason",
+    "ChartSelectionResult",
     "EncryptedPDFError",
     "FileSizeLimitError",
     "PDFPageLimitError",
@@ -52,6 +66,8 @@ __all__ = [
     "URLFetchError",
     "URLSafetyError",
     "URLSafetyLimits",
+    "UnitGroup",
     "analyze_anomalies",
     "detect_changes",
+    "select_chart",
 ]
