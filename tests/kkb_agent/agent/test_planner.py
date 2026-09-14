@@ -14,6 +14,12 @@ from kkb_agent.frame import Operation, OperationType
 
 
 def operation_payload(kind="index_column", source_version=0, **changes):
+    """One planned operation as the model now emits it: kind and parameters only.
+
+    operation_id, timestamp and the version numbers used to be the model's to emit. They
+    are bookkeeping, and under constrained decoding the model minimised them - three
+    operations all called "p" - so the planner assigns them instead.
+    """
     default_parameters = {
         "index_column": {"column_key": "loans", "base_date": "2025-01-01"},
         "deflate_column": {
@@ -26,14 +32,9 @@ def operation_payload(kind="index_column", source_version=0, **changes):
         "add_column": {"series_reference": "catalog:cpi", "column_key": "cpi"},
     }
     parameters = changes.pop("parameters", default_parameters.get(kind, {}))
-    return {
-        "operation_id": f"op-{source_version}",
-        "kind": kind,
-        "parameters": parameters,
-        "timestamp": "2026-09-12T12:00:00Z",
-        "source_version": source_version,
-        "resulting_version": source_version + 1,
-    } | changes
+    changes.pop("operation_id", None)
+    changes.pop("source_version", None)
+    return {"kind": kind, "parameters": parameters} | changes
 
 
 def response(payload):
@@ -178,10 +179,53 @@ def test_native_strict_json_schema_path_is_used():
             "strict": True,
         },
     }
+    # One branch per operation kind, each pairing the kind with its own parameters. A
+    # single shape with an untagged parameters union is satisfiable by any kind carrying
+    # any kind's parameters, and the model duly emitted add_column with index_column's.
     item_schema = call["response_format"]["json_schema"]["schema"]["properties"]["operations"][
         "items"
     ]
-    assert item_schema["title"] == "Operation"
+    branches = item_schema["anyOf"]
+    assert {branch["properties"]["kind"]["const"] for branch in branches} == {
+        "add_column",
+        "deflate_column",
+        "index_column",
+        "revert_to",
+    }
+    for branch in branches:
+        assert set(branch["required"]) == {"kind", "parameters"}
+
+
+def test_identifier_fields_are_narrowed_to_what_exists():
+    """Under constrained decoding a free string field is satisfied by the shortest legal
+    string - "series_reference": "b" - however firmly the prompt asks otherwise. The only
+    reliable fix is to remove the choice."""
+    schema = operation_plan_schema(
+        series_references=["catalog:cpi"],
+        column_keys=["cpi", "loans"],
+        conventions=["cpi_base_period_constant_prices_v1"],
+        base_dates=["2021-01-01"],
+    )
+    branches = {
+        branch["properties"]["kind"]["const"]: branch["properties"]["parameters"]["properties"]
+        for branch in schema["properties"]["operations"]["items"]["anyOf"]
+    }
+    assert branches["add_column"]["series_reference"] == {"enum": ["catalog:cpi"]}
+    assert branches["deflate_column"]["deflator_column_key"] == {"enum": ["cpi", "loans"]}
+    assert branches["deflate_column"]["convention_reference"] == {
+        "enum": ["cpi_base_period_constant_prices_v1"]
+    }
+    assert branches["deflate_column"]["base_date"] == {"enum": ["2021-01-01"]}
+
+
+def test_an_unconstrained_schema_leaves_identifiers_free():
+    """The narrowing is opt-in: a caller with no vocabulary to offer still gets a usable
+    schema rather than one that permits nothing."""
+    branches = {
+        branch["properties"]["kind"]["const"]: branch["properties"]["parameters"]["properties"]
+        for branch in operation_plan_schema()["properties"]["operations"]["items"]["anyOf"]
+    }
+    assert "enum" not in branches["add_column"]["series_reference"]
 
 
 def test_planner_never_executes_or_receives_a_frame():
@@ -191,14 +235,36 @@ def test_planner_never_executes_or_receives_a_frame():
     assert operations[0].kind is OperationType.INDEX_COLUMN
 
 
-def test_invalid_version_chain_gets_one_retry_then_explicit_error():
-    invalid = {"operations": [operation_payload(source_version=4)]}
+def test_an_operation_carrying_bookkeeping_is_refused_after_one_retry():
+    """Versions and ids are assigned by the planner, so a model that sends its own is not
+    following the contract - and its numbers would silently override ours."""
+    invalid = {
+        "operations": [
+            {
+                "kind": "index_column",
+                "parameters": {"column_key": "loans", "base_date": "2025-01-01"},
+                "source_version": 4,
+            }
+        ]
+    }
     client = FakeMIAClient([invalid, invalid])
 
-    with pytest.raises(PlannerValidationError, match="expected 0"):
+    with pytest.raises(PlannerValidationError, match="only kind and parameters"):
         OperationPlanner(client).plan("Index loans", "column_key=loans", 0)
 
     assert len(client.completions.calls) == 2
+
+
+def test_versions_are_assigned_contiguously_from_the_current_version():
+    """The model says what to do and in what order; numbering it is arithmetic."""
+    payload = {
+        "operations": [operation_payload("index_column"), operation_payload("deflate_column")]
+    }
+    operations, _ = plan([payload], current_version=7)
+
+    assert [op.source_version for op in operations] == [7, 8]
+    assert [op.resulting_version for op in operations] == [8, 9]
+    assert len({op.operation_id for op in operations}) == 2
 
 
 def test_provider_failure_is_explicit_and_not_retried():
