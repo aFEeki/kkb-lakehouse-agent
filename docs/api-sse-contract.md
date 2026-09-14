@@ -1,7 +1,7 @@
 # API and SSE contract v1
 
-This document defines transport shapes only. There is no ask route, SSE endpoint,
-`EventSource` client, retry policy or runtime orchestration in this scope.
+This document defines the transport shapes and the backend SSE boundary. Runtime
+orchestration and the frontend `EventSource` client remain outside this scope.
 
 ## Sources and committed artifacts
 
@@ -12,8 +12,21 @@ generated from the Python contracts.
 
 Frontend development can replay `tests/fixtures/api/successful-stream.jsonl` and
 `tests/fixtures/api/error-stream.jsonl`. Each line is the JSON object carried in one future
-SSE `data:` field. The future wire format uses the envelope's `type` for the SSE `event:`
-field and `event_id` for `id:`; this task does not implement that encoder.
+SSE `data:` field. `POST /ask` now uses the envelope's `type` for the SSE `event:` field and
+`event_id` for `id:`. Each event ends with a blank line and is independently parseable.
+
+## HTTP execution boundary
+
+`POST /ask` validates its JSON body directly as the frozen `AskRequest` and returns
+`text/event-stream` with `Cache-Control: no-cache`, `Connection: keep-alive`, and
+`X-Accel-Buffering: no`. It consumes the injected asynchronous `AskRunner`; the route does
+not resolve series, call a model, execute operations, or generate narrative itself.
+
+Until production orchestration supplies an `AskRunner`, the default runner produces a safe
+failed stream. Runner exceptions are logged server-side and mapped to the existing typed
+`error` contract without exception text, traceback, environment values, or credentials.
+An active stage is then closed as failed and the stream terminates with
+`completion(outcome="failed")`.
 
 ## Ask request
 
