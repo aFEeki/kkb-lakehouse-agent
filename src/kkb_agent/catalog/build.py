@@ -462,18 +462,30 @@ def evds_measure(name: str, unit_raw: str) -> MeasureType:
     """What an EVDS series measures, from its unit first and its name second.
 
     The unit is the stronger signal because it comes from EVDS's own metadata, while the
-    name is prose. The name settles the two things the unit cannot: whether "Yüzde" is an
-    interest rate, which averages when downsampled, or a ratio, which takes the period
-    end; and whether a money figure is a position or a transaction.
+    name is prose. The name settles the two things the unit cannot: whether a percentage
+    is an interest rate, which averages when downsampled, or a ratio, which takes the
+    period end; and whether a money figure is a position or a transaction.
+
+    The unit is compared after normalisation. EVDS writes percent as "Yüzde", "%" and
+    "Ağırlıklı ortalama" in different datagroups; testing the raw string sent every
+    interest rate whose table is published on a new-business basis - "Konut Kredisi
+    (TL, Akım, %)" - down to the money branch, where "Akım" in the name turned it into a
+    FLOW. A rate reported as a flow is exactly the error this field exists to prevent.
     """
     unit = unit_raw.strip().casefold()
+    normalized, _ = normalise_unit(unit_raw)
     lowered = name.casefold()
 
     if unit in COUNT_UNITS:
         return MeasureType.COUNT
-    if unit.endswith("=100") or unit == "endeks":
+    if normalized == "endeks":
         return MeasureType.INDEX
-    if unit == "yüzde":
+    if unit == "ağırlıklı ortalama":
+        # Verified across the catalogue: every one of the ten datagroups carrying this
+        # unit is a "Faiz Oranları" or "Kâr Oranları" table, so the figure is a rate
+        # whether or not the series name happens to say "faiz".
+        return MeasureType.RATE
+    if normalized == "%":
         return MeasureType.RATE if "faiz" in lowered else MeasureType.RATIO
     if "endeks" in lowered:
         return MeasureType.INDEX
