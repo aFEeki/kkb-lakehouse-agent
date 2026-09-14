@@ -111,12 +111,17 @@ def _measure_from(statement: StatementKind | None, unit_raw: str) -> MeasureType
     A count is decided by its unit before the statement is consulted, because BDDK files
     branch, bank and ATM counts under "Rasyolar" alongside genuine ratios. Reading the
     statement first would label 10,569 branches a ratio.
+
+    The unit is compared after normalisation, not as published. BDDK writes percent as
+    "%", "(YÜZDE)" and "(Yüzde)" in different tables; matching the literal "%" silently
+    classified the capital-adequacy and FX-position ratios as balance-sheet amounts.
     """
+    normalized, _ = normalise_unit(unit_raw)
     if unit_raw.strip().casefold() in COUNT_UNITS:
         return MeasureType.COUNT
     if statement is StatementKind.RATIO:
         return MeasureType.RATIO
-    if unit_raw.strip() == "%":
+    if normalized == "%":
         return MeasureType.RATE
     if statement is StatementKind.INCOME_STATEMENT:
         return MeasureType.FLOW
@@ -138,6 +143,18 @@ def _caption_unit(caption: str) -> str:
 AYLIK_TABLE_UNIT: dict[int, str] = {
     16: "Adet",  # Diğer Bilgiler - banka, şube, ATM, personel sayıları
     17: "%",  # Yurt Dışı Şube Rasyoları - labels carry no (%) but the values are
+}
+
+# Single rows that contradict their table's caption and do not say so in their label.
+# Keyed by (table, normalised label). Found by the bank-group partition check (SCRUM-28):
+# a ratio does not add across bank groups, so it stands out against an identity that
+# every genuine balance-sheet line satisfies.
+#
+# Kept as an explicit list of two rather than a rule. The obvious rule - a label
+# containing "oran" or "/" is a ratio - would misclassify "TP Mevduat / Katılım Fonları",
+# "Gemi/Tekne Yapımı" and eleven other perfectly ordinary balance rows.
+AYLIK_ROW_UNIT: dict[tuple[int, str], tuple[str, MeasureType]] = {
+    (11, "Likidite Yeterlilik Oranı"): ("%", MeasureType.RATIO),
 }
 
 _TRAILING_PAREN = re.compile(r"\(([^()]*)\)\s*$")
@@ -219,11 +236,23 @@ def iter_bddk_aylik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                     key,
                     {
                         "raw_label": raw_label,
-                        # Caption first: for tables 1-14 it states the unit for the whole
-                        # table. Where it is silent the row says so itself, and where
-                        # neither does, the table is one we have read off the source.
+                        # The row wins over the caption. A caption states the table's
+                        # default; a row naming its own unit is contradicting that default
+                        # on purpose, and tables 12 and 13 each carry a "(YÜZDE)" ratio row
+                        # inside a table captioned "milyon TL". Reading the caption first
+                        # turned those into balance-sheet amounts, which the bank-group
+                        # partition check then caught (SCRUM-28).
                         "unit_raw": (
-                            unit_raw or _label_unit(raw_label) or AYLIK_TABLE_UNIT.get(table_no, "")
+                            override[0]
+                            if (override := AYLIK_ROW_UNIT.get((table_no, raw_label)))
+                            else (
+                                _label_unit(raw_label)
+                                or unit_raw
+                                or AYLIK_TABLE_UNIT.get(table_no, "")
+                            )
+                        ),
+                        "measure_override": (
+                            AYLIK_ROW_UNIT.get((table_no, raw_label), (None, None))[1]
                         ),
                         "row_index": cell[1] if len(cell) > 1 else None,
                     },
@@ -236,7 +265,7 @@ def iter_bddk_aylik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
         ev = classify(s)
         mode, why = resolve_by_statement(table_no, label, ev.mode)
         unit_norm, scale = normalise_unit(bits["unit_raw"])
-        measure = _measure_from(statement, bits["unit_raw"])
+        measure = bits.get("measure_override") or _measure_from(statement, bits["unit_raw"])
         ident = identify("bddk_aylik", table_no, taraf, bits["raw_label"])
 
         yield (
