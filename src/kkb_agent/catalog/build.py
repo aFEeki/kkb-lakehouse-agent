@@ -34,6 +34,7 @@ from kkb_agent.transform.cumulative import (
     CumulativeMode,
     StatementKind,
     classify,
+    decumulate,
     resolve_by_statement,
 )
 from kkb_agent.transform.haftalik_html import extract as extract_weekly
@@ -597,12 +598,19 @@ def to_frames(pairs: list[tuple[SeriesMeta, pd.Series]]) -> tuple[pd.DataFrame, 
                 "notes": meta.notes,
             }
         )
-        for period, value in s.items():
+        # `value` is this period's own figure for every series in the catalog, so a join
+        # cannot accidentally read a year-to-date total as a monthly one. The published
+        # figure is kept alongside it: dropping it would make the year-end closure check
+        # impossible and would lose the provenance the trust layer needs to show.
+        periodised = decumulate(s, meta.cumulative_mode)
+        for period, reported in s.items():
+            value = periodised.get(period)
             observations.append(
                 {
                     "series_id": meta.series_id,
                     "period": period.date() if hasattr(period, "date") else period,
-                    "value": None if pd.isna(value) else float(value),
+                    "value": None if value is None or pd.isna(value) else float(value),
+                    "value_reported": None if pd.isna(reported) else float(reported),
                 }
             )
     return pd.DataFrame(catalog), pd.DataFrame(observations)

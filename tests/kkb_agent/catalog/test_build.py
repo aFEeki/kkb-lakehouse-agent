@@ -26,6 +26,7 @@ from kkb_agent.catalog.build import (
     iter_bddk_aylik,
     iter_bddk_haftalik,
     scope_matches,
+    to_frames,
 )
 from kkb_agent.catalog.schema import MeasureType, normalise_unit
 from kkb_agent.transform.cumulative import StatementKind
@@ -98,6 +99,78 @@ class TestScopesStayApart:
     def test_each_scope_keeps_its_full_history(self, bronze: Path):
         for _, s in iter_bddk_aylik(bronze):
             assert len(s) == 2
+
+
+class TestDecumulationIsApplied:
+    """SCRUM-24 - classifying a series as accumulating is not the same as acting on it.
+
+    599 series accumulate within the year. Before this, `value` held the running total,
+    so a join reading June's "Dönem Karı" got six months of profit and called it one -
+    a 4.4x error with no exception anywhere.
+    """
+
+    def write_profit(self, bronze: Path, period: str, ytd_total: int) -> None:
+        """Table 2 is the income statement, which BDDK publishes year-to-date."""
+        payload = {
+            "Json": {
+                "caption": f"Kar Zarar (milyon TL), Dönem:{period.replace('-0', '/')}",
+                "colNames": ["", "", "", "BasitFont", "Toplam"],
+                "data": {"rows": [{"cell": ["Sektör", 1, "Dönem Karı (Zararı)", "", ytd_total]}]},
+            }
+        }
+        d = bronze / period
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "t02_taraf10001.json").write_text(json.dumps(payload, ensure_ascii=False), "utf-8")
+
+    @pytest.fixture
+    def profit_bronze(self, tmp_path: Path) -> Path:
+        b = tmp_path / "aylik"
+        for month, ytd in enumerate([100, 250, 420, 600], start=1):
+            self.write_profit(b, f"2021-{month:02d}", ytd)
+        return b
+
+    def test_the_series_is_recognised_as_accumulating(self, profit_bronze: Path):
+        meta, _ = next(iter(iter_bddk_aylik(profit_bronze)))
+        assert str(meta.cumulative_mode) == "ytd"
+
+    def test_value_is_the_period_not_the_running_total(self, profit_bronze: Path):
+        pairs = list(iter_bddk_aylik(profit_bronze))
+        catalog, observations = to_frames(pairs)
+        assert len(catalog) == 1
+
+        by_period = {str(r["period"]): r for r in observations.to_dict("records")}
+        assert [by_period[f"2021-{m:02d}-01"]["value"] for m in (1, 2, 3, 4)] == [
+            100,
+            150,
+            170,
+            180,
+        ]
+
+    def test_the_published_total_is_kept_alongside(self, profit_bronze: Path):
+        """Dropping it would make the year-end closure check impossible and lose the
+        provenance the trust layer has to show."""
+        _, observations = to_frames(list(iter_bddk_aylik(profit_bronze)))
+        by_period = {str(r["period"]): r for r in observations.to_dict("records")}
+        assert [by_period[f"2021-{m:02d}-01"]["value_reported"] for m in (1, 2, 3, 4)] == [
+            100,
+            250,
+            420,
+            600,
+        ]
+
+    def test_the_year_first_observation_is_its_own_value(self, profit_bronze: Path):
+        """January has no prior month to difference against, so it IS January."""
+        _, observations = to_frames(list(iter_bddk_aylik(profit_bronze)))
+        january = next(
+            r for r in observations.to_dict("records") if str(r["period"]).endswith("01-01")
+        )
+        assert january["value"] == january["value_reported"] == 100
+
+    def test_a_level_series_is_left_alone(self, bronze: Path):
+        """Balance-sheet rows do not accumulate, so both columns hold the same figure."""
+        _, observations = to_frames(list(iter_bddk_aylik(bronze)))
+        for r in observations.to_dict("records"):
+            assert r["value"] == r["value_reported"]
 
 
 class TestScopeGuard:

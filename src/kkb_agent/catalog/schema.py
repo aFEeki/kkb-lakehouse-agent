@@ -232,9 +232,14 @@ OBSERVATIONS_TABLE = "series_observations"
 
 OBSERVATIONS_DDL = f"""
 CREATE TABLE IF NOT EXISTS {OBSERVATIONS_TABLE} (
-    series_id   VARCHAR NOT NULL,
-    period      DATE NOT NULL,
-    value       DOUBLE,               -- NULL means not observed; never zero-filled
+    series_id       VARCHAR NOT NULL,
+    period          DATE NOT NULL,
+    -- This period's own figure, for every series. A year-to-date series is de-cumulated
+    -- on the way in, so a join can never read six months of profit as one month's.
+    value           DOUBLE,           -- NULL means not observed; never zero-filled
+    -- The figure as the source published it. Equal to `value` unless the series
+    -- accumulates. Kept for the year-end closure check and for provenance.
+    value_reported  DOUBLE,
     PRIMARY KEY (series_id, period)
 );
 """
