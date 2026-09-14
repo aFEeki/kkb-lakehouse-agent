@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+import duckdb
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -96,10 +97,36 @@ def _default_runner(config: Settings) -> AskRunner:
     against an absent file would raise per request and log a stack trace every time.
     """
     catalog = config.duckdb_path
-    if not Path(catalog).exists():
-        logger.warning("Catalog %s is absent; /ask will report unavailable", catalog)
+    if not _turn1_catalog_ready(catalog):
+        logger.warning("Turn 1 catalog is not ready; /ask will report unavailable")
         return UnavailableAskRunner()
     return TurnOneAskRunner(catalog)
+
+
+def _turn1_catalog_ready(catalog: Path | str) -> bool:
+    """Require initialized, populated catalog and observation tables."""
+    if not Path(catalog).is_file():
+        return False
+    try:
+        connection = duckdb.connect(str(catalog), read_only=True)
+        try:
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
+                ).fetchall()
+            }
+            if not {"series_catalog", "series_observations"} <= tables:
+                return False
+            return all(
+                connection.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() is not None
+                for table in ("series_catalog", "series_observations")
+            )
+        finally:
+            connection.close()
+    except Exception:
+        logger.warning("Turn 1 catalog readiness check failed", exc_info=True)
+        return False
 
 
 async def _stream_ask(runner: AskRunner, request: AskRequest):

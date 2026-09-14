@@ -12,11 +12,13 @@ from kkb_agent.api.contracts import (
     ask_request_json_schema,
     stream_event_json_schema,
 )
+from kkb_agent.api.frame_store import AnalysisFrameStore
 from kkb_agent.api.runner import AskRunner
 
 __all__ = [
     "AskRequest",
     "AskRunner",
+    "AnalysisFrameStore",
     "CompletionEvent",
     "ErrorEvent",
     "ResultEvent",

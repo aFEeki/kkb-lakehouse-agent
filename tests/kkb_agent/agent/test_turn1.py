@@ -7,14 +7,28 @@ checkout with no data while the check still runs for anyone who has it.
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pytest
 
-from kkb_agent.agent.turn1 import BALANCE_KEY, CPI_KEY, RATE_KEY, build_turn1, find_decline_window
+from kkb_agent.agent.turn1 import (
+    BALANCE_KEY,
+    RATE_KEY,
+    TurnOneSpineError,
+    _rate_caveats,
+    _scripted_plan,
+    _validate_published_spine,
+    build_turn1,
+    find_decline_window,
+)
+from kkb_agent.api.main import _turn1_catalog_ready
+from kkb_agent.frame import AnalysisFrame, OperationType, Spine
 
 GOLD = Path(__file__).resolve().parents[3] / "data" / "gold" / "lakehouse.duckdb"
-needs_catalog = pytest.mark.skipif(not GOLD.exists(), reason="gold catalog not built")
+needs_catalog = pytest.mark.skipif(
+    not _turn1_catalog_ready(GOLD), reason="populated gold catalog not built"
+)
 
 
 class TestFindDeclineWindow:
@@ -41,6 +55,54 @@ class TestFindDeclineWindow:
         assert find_decline_window((None, None, 3.0)) is None
 
 
+def test_turn_one_script_adds_only_nominal_balance_and_rate():
+    class RecordingExecutor:
+        def __init__(self):
+            self.operations = []
+
+        def execute(self, frame, operation):
+            self.operations.append(operation)
+            return frame.model_copy(
+                update={
+                    "version": operation.resulting_version,
+                    "operations": (*frame.operations, operation),
+                }
+            )
+
+    executor = RecordingExecutor()
+    frame = AnalysisFrame(frame_id="turn-one", spine=Spine(values=[]))
+    available = {BALANCE_KEY: "balance-series", RATE_KEY: "rate-series"}
+
+    result = _scripted_plan(executor, frame, available)
+
+    assert result.version == 2
+    assert [operation.kind for operation in executor.operations] == [
+        OperationType.ADD_COLUMN,
+        OperationType.ADD_COLUMN,
+    ]
+    assert [operation.parameters.column_key for operation in executor.operations] == [
+        BALANCE_KEY,
+        RATE_KEY,
+    ]
+    assert all(
+        "cpi" not in operation.parameters.series_reference for operation in executor.operations
+    )
+
+
+def test_rate_caveat_uses_the_resolved_series_identifier():
+    caveats = _rate_caveats("evds.actual-resolved-rate")
+    assert "evds.actual-resolved-rate" in caveats[0]
+    assert "TP.KTF12" not in caveats[0]
+
+
+def test_published_spine_requires_all_sixty_contiguous_months():
+    periods = tuple(date(2021 + index // 12, index % 12 + 1, 1) for index in range(60))
+    _validate_published_spine(periods, date(2021, 1, 1), date(2025, 12, 1))
+    for invalid in (periods[:-1], periods[:20] + periods[21:], periods[:10] + periods[9:]):
+        with pytest.raises(TurnOneSpineError, match="60 contiguous"):
+            _validate_published_spine(invalid, date(2021, 1, 1), date(2025, 12, 1))
+
+
 @pytest.fixture(scope="module")
 def result():
     """Built once: it opens the catalog and runs the whole turn."""
@@ -52,10 +114,10 @@ class TestTurnOneAgainstTheCatalog:
     def test_the_spine_is_sixty_months(self, result):
         assert len(result.frame.spine.values) == 60
 
-    def test_all_three_series_plus_the_deflated_column_are_present(self, result):
+    def test_only_the_nominal_balance_and_rate_are_present(self, result):
         keys = [c.key for c in result.frame.columns]
-        assert {BALANCE_KEY, RATE_KEY, CPI_KEY} <= set(keys)
-        assert any("deflated_by" in k for k in keys)
+        assert keys == [BALANCE_KEY, RATE_KEY]
+        assert all("deflated_by" not in key for key in keys)
 
     def test_the_rate_column_has_no_gaps(self, result):
         """It is weekly collapsed to monthly, so every month should be covered."""
@@ -68,7 +130,8 @@ class TestTurnOneAgainstTheCatalog:
 
     def test_it_answers_the_question_over_the_window_where_rates_did_fall(self, result):
         decline = next(f for f in result.frame.findings if f.finding_id == "f-decline")
-        assert "reel" in decline.statement.casefold()
+        assert "nominal" in decline.statement.casefold()
+        assert "turn 2" in decline.statement.casefold()
         assert decline.supporting_column_keys
 
     def test_the_stock_versus_flow_distinction_is_always_stated(self, result):
