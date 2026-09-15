@@ -1,5 +1,6 @@
 import { AnalysisChart } from "@/components/analysis-chart";
 import { AnalysisTable } from "@/components/analysis-table";
+import { AskPanel } from "@/components/ask-panel";
 import { HealthPanel } from "@/components/health-panel";
 import { loadSuccessfulReplayFrame } from "@/lib/replay-fixture";
 
@@ -16,7 +17,10 @@ export default function Home() {
         <div className="max-w-xl">
           <HealthPanel />
         </div>
-        <section className="mt-12 min-w-0" aria-labelledby="analysis-table-title">
+        <section className="mt-16 min-w-0">
+          <AskPanel />
+        </section>
+        <section className="mt-16 min-w-0" aria-labelledby="analysis-table-title">
           <div className="mb-4">
             <p className="text-sm text-teal-400">SCRUM-68 replay fixture</p>
             <h2 className="mt-1 text-xl font-semibold" id="analysis-table-title">
