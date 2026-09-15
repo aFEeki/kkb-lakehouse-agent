@@ -1,5 +1,15 @@
 """URL agent: route fetched content to the handler for its actual media type."""
 
+from kkb_agent.tools.url_agent.discovery import (
+    DEFAULT_ACCEPTED_KINDS,
+    DEFAULT_MAX_HOPS,
+    DiscoveredDocument,
+    DiscoveryHop,
+    Fetcher,
+    discover_document,
+    score_link,
+    terms,
+)
 from kkb_agent.tools.url_agent.handlers import (
     DEFAULT_LIMITS,
     ExtractionLimits,
@@ -11,9 +21,11 @@ from kkb_agent.tools.url_agent.handlers import (
 from kkb_agent.tools.url_agent.models import (
     ContentExtractionError,
     DocumentKind,
+    DocumentNotFoundError,
     ExtractedLink,
     ExtractedPage,
     ExtractedTable,
+    HopLimitError,
     OCRBackendError,
     PDFTextLayerMissingError,
     UnimplementedContentTypeError,
@@ -43,7 +55,9 @@ from kkb_agent.tools.url_agent.router import (
 )
 
 __all__ = [
+    "DEFAULT_ACCEPTED_KINDS",
     "DEFAULT_LIMITS",
+    "DEFAULT_MAX_HOPS",
     "GENERIC_MEDIA_TYPES",
     "MAX_IMAGES_PER_CALL",
     "MEDIA_TYPE_KINDS",
@@ -52,7 +66,12 @@ __all__ = [
     "ContentExtractionError",
     "ContentHandler",
     "ContentTypeRouter",
+    "DiscoveredDocument",
+    "DiscoveryHop",
     "DocumentKind",
+    "DocumentNotFoundError",
+    "Fetcher",
+    "HopLimitError",
     "ExtractedLink",
     "ExtractedPage",
     "ExtractedTable",
@@ -68,12 +87,15 @@ __all__ = [
     "UnsupportedContentTypeError",
     "content_sha256",
     "create_content_type_router",
+    "discover_document",
     "extract_excel",
     "extract_html",
     "extract_image",
     "extract_pdf",
     "extract_text",
     "ocr_images",
+    "score_link",
     "sniff_kind",
     "strip_layout_tags",
+    "terms",
 ]

@@ -34,6 +34,14 @@ class OCRBackendError(ContentExtractionError):
     """The OCR backend failed or returned an unusable response."""
 
 
+class DocumentNotFoundError(URLAgentError):
+    """No link on the traversed pages matched the requested document."""
+
+
+class HopLimitError(URLAgentError):
+    """The requested document was not reached within the allowed number of hops."""
+
+
 class DocumentKind(StrEnum):
     HTML = "html"
     PDF = "pdf"
