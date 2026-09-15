@@ -1,9 +1,11 @@
+import { AnalysisChart } from "@/components/analysis-chart";
 import { AnalysisTable } from "@/components/analysis-table";
 import { HealthPanel } from "@/components/health-panel";
 import { loadSuccessfulReplayFrame } from "@/lib/replay-fixture";
 
 export default function Home() {
   const frame = loadSuccessfulReplayFrame();
+  const chartFrame = { spine: frame.spine, columns: frame.columns };
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-20 text-slate-100">
@@ -23,6 +25,21 @@ export default function Home() {
           </div>
           <AnalysisTable frame={frame} />
         </section>
+        {frame.charts.length > 0 ? (
+          <section className="mt-12 min-w-0" aria-labelledby="analysis-chart-title">
+            <div className="mb-4">
+              <p className="text-sm text-teal-400">Server ChartSpec</p>
+              <h2 className="mt-1 text-xl font-semibold" id="analysis-chart-title">
+                Analiz grafiği
+              </h2>
+            </div>
+            <div className="space-y-6">
+              {frame.charts.map((chart) => (
+                <AnalysisChart chart={chart} frame={chartFrame} key={chart.chart_id} />
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </main>
   );

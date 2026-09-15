@@ -20,3 +20,25 @@ export type AnalysisTableFrame = {
   };
   columns: readonly AnalysisColumn[];
 };
+
+export type AnalysisChartType = "line" | "bar" | "scatter";
+
+export type AnalysisChartAxisAssignment = {
+  column_key: string;
+  axis: "left" | "right";
+};
+
+export type AnalysisChartSpec = {
+  chart_id: string;
+  chart_type: AnalysisChartType;
+  spine_key: string;
+  column_keys: readonly string[];
+  axis_policy: "by_unit";
+  axis_assignments: readonly AnalysisChartAxisAssignment[];
+  indexing_recommended: boolean;
+  title: string | null;
+};
+
+export type AnalysisReplayFrame = AnalysisTableFrame & {
+  charts: readonly AnalysisChartSpec[];
+};
