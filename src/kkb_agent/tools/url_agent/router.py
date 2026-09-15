@@ -137,23 +137,31 @@ class ContentTypeRouter:
 
 def create_content_type_router(
     *,
+    ocr: object | None = None,
     pdf_handler: ContentHandler | None = None,
     image_handler: ContentHandler | None = None,
 ) -> ContentTypeRouter:
-    """Build a router with the handlers that need no model call already registered.
+    """Build a router with every handler this composition can currently serve.
 
-    PDF and image extraction depend on OCR and are supplied by their own backlog tasks;
-    until one is passed here, that content type fails as unimplemented rather than being
-    silently guessed at.
+    PDF handling is always registered: a PDF with a text layer is read by pypdf with no
+    model call at all. Passing `ocr` additionally enables the scanned-PDF fallback; without
+    it, a PDF with no text layer fails with `PDFTextLayerMissingError` instead of returning
+    an empty document. Image extraction is OCR-only, so it is registered only when an OCR
+    backend is supplied. `pdf_handler`/`image_handler` override both, for tests and for a
+    future handler that needs different wiring.
     """
+
+    from kkb_agent.tools.url_agent.ocr import extract_image
+    from kkb_agent.tools.url_agent.pdf import extract_pdf
 
     handlers: dict[DocumentKind, ContentHandler] = {
         DocumentKind.HTML: extract_html,
         DocumentKind.EXCEL: extract_excel,
         DocumentKind.TEXT: extract_text,
+        DocumentKind.PDF: pdf_handler or (lambda content: extract_pdf(content, ocr=ocr)),
     }
-    if pdf_handler is not None:
-        handlers[DocumentKind.PDF] = pdf_handler
     if image_handler is not None:
         handlers[DocumentKind.IMAGE] = image_handler
+    elif ocr is not None:
+        handlers[DocumentKind.IMAGE] = lambda content: extract_image(content, ocr=ocr)
     return ContentTypeRouter(handlers)

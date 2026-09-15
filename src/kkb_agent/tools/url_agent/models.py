@@ -26,6 +26,14 @@ class ContentExtractionError(URLAgentError):
     """A registered handler could not extract content safely."""
 
 
+class PDFTextLayerMissingError(ContentExtractionError):
+    """A PDF carries no text layer and no OCR backend was supplied to read it."""
+
+
+class OCRBackendError(ContentExtractionError):
+    """The OCR backend failed or returned an unusable response."""
+
+
 class DocumentKind(StrEnum):
     HTML = "html"
     PDF = "pdf"
@@ -49,6 +57,18 @@ class ExtractedLink(Contract):
     url: str
 
 
+class ExtractedPage(Contract):
+    """Text recovered from one page, with the page number it actually came from.
+
+    `page_number` is 1-based and is the only position this tool ever claims. Finer
+    positions stay absent rather than being inferred.
+    """
+
+    page_number: int = Field(ge=1)
+    text: str = ""
+    extraction_method: Identifier
+
+
 class URLDocument(Contract):
     """What one fetched document yielded. Every field is untrusted source data.
 
@@ -64,6 +84,7 @@ class URLDocument(Contract):
     text: str = ""
     tables: tuple[ExtractedTable, ...] = ()
     links: tuple[ExtractedLink, ...] = ()
+    pages: tuple[ExtractedPage, ...] = ()
     page_count: int | None = Field(default=None, ge=0)
     byte_count: int = Field(ge=0)
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")

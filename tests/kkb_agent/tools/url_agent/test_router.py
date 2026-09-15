@@ -119,9 +119,11 @@ def test_unidentifiable_bytes_without_a_type_are_refused():
 
 
 def test_recognised_type_without_a_handler_is_reported_as_unimplemented():
-    pdf = content(body=b"%PDF-1.4\n", content_type="application/pdf")
+    # Images are OCR-only, so a router built without an OCR backend recognises a PNG but
+    # states plainly that it has nothing wired up to read it.
+    png = content(body=b"\x89PNG\r\n\x1a\nrest", content_type="image/png")
     with pytest.raises(UnimplementedContentTypeError, match="no handler is registered"):
-        create_content_type_router().route(pdf)
+        create_content_type_router().route(png)
 
 
 def test_registering_a_pdf_handler_makes_the_type_supported():
