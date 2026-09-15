@@ -15,6 +15,7 @@ from kkb_agent.transform.cumulative import (
     classify,
     decumulate,
     resolve_by_statement,
+    verifier_for,
     ytd_closure_holds,
 )
 
@@ -139,3 +140,36 @@ class TestStatementKindResolution:
         mode, why = resolve_by_statement(99, "whatever", CumulativeMode.AMBIGUOUS)
         assert mode is CumulativeMode.AMBIGUOUS
         assert "no statement kind" in why
+
+
+class TestVerifierFor:
+    """SCRUM-31 gates gold on cumulative_verified_by: a series whose mode nothing
+    established must not be served, because de-cumulating on a guess produces numbers that
+    look plausible and are wrong. The field records what decided, where
+    cumulative_evidence records what was observed - only the first can be checked
+    mechanically."""
+
+    def test_a_confident_pattern_result_is_credited_to_the_pattern(self):
+        assert verifier_for(CumulativeMode.YTD, CumulativeMode.YTD) == "pattern"
+
+    def test_an_ambiguous_pattern_settled_later_is_credited_to_the_statement(self):
+        assert verifier_for(CumulativeMode.AMBIGUOUS, CumulativeMode.NONE) == "statement"
+
+    def test_still_ambiguous_means_nothing_verified_it(self):
+        """The one case that must stay empty. A label here would defeat the check the
+        field exists to support."""
+        assert verifier_for(CumulativeMode.AMBIGUOUS, CumulativeMode.AMBIGUOUS) == ""
+
+    def test_it_agrees_with_what_resolve_by_statement_actually_did(self):
+        """Guards the pairing rather than the function alone: these are read together at
+        every call site, so a change to one that desynchronises them is the real risk."""
+        for table, label, pattern in [
+            (4, "Tüketici Kredileri", CumulativeMode.YTD),  # pattern is confident
+            (2, "Alınan Kar Payları", CumulativeMode.AMBIGUOUS),  # statement settles it
+            (99, "whatever", CumulativeMode.AMBIGUOUS),  # nothing settles it
+        ]:
+            mode, why = resolve_by_statement(table, label, pattern)
+            verifier = verifier_for(pattern, mode)
+            assert bool(verifier) is (mode is not CumulativeMode.AMBIGUOUS)
+            if verifier == "pattern":
+                assert "not consulted" in why
