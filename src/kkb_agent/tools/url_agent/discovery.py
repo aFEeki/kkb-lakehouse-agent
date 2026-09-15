@@ -18,6 +18,7 @@ from kkb_agent.tools.url_agent.models import (
     URLDocument,
 )
 from kkb_agent.tools.url_agent.router import ContentTypeRouter
+from kkb_agent.tools.url_agent.timeouts import Deadline
 from kkb_agent.tools.url_safety import UntrustedContent
 
 DEFAULT_MAX_HOPS = 2
@@ -132,12 +133,17 @@ def discover_document(
     router: ContentTypeRouter,
     max_hops: int = DEFAULT_MAX_HOPS,
     accepted_kinds: frozenset[DocumentKind] = DEFAULT_ACCEPTED_KINDS,
+    deadline: Deadline | None = None,
 ) -> DiscoveredDocument:
     """Walk from a landing page to the document it links, at most `max_hops` times.
 
     The search is deterministic: links are scored by term overlap with the request, ties
     break towards the link that appears first in the page, and every step records which
     link it took and why. No model is consulted.
+
+    A `deadline` bounds the whole walk, not each hop: two fetches that each finish inside
+    their own timeout can still miss the turn between them. Running out raises
+    `ToolTimeoutError` carrying the hops already walked.
     """
 
     if type(max_hops) is not int or max_hops < 0:
@@ -149,6 +155,8 @@ def discover_document(
     visited = {current_url}
 
     for hop_index in range(max_hops + 1):
+        if deadline is not None:
+            deadline.require(f"fetching {current_url!r}", partial=tuple(hops))
         document = router.route(fetcher.fetch(current_url))
 
         if document.kind in accepted_kinds:
