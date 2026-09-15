@@ -10,6 +10,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from kkb_agent.agent.turn1 import CATALOG_COLUMNS as TURN1_CATALOG_COLUMNS
+from kkb_agent.agent.turn1 import RATE_SERIES_ID, WINDOW_END, WINDOW_START
 from kkb_agent.api.contracts import (
     STREAM_EVENT_ADAPTER,
     AskRequest,
@@ -25,9 +27,20 @@ from kkb_agent.api.runner import AskRunner, UnavailableAskRunner
 from kkb_agent.api.turn1_runner import TurnOneAskRunner
 from kkb_agent.catalog.duckdb_store import DuckDBStore
 from kkb_agent.catalog.lance_store import LanceStore
+from kkb_agent.catalog.series_source import CATALOG_COLUMNS as SERIES_SOURCE_COLUMNS
 from kkb_agent.config import Settings
 
 logger = logging.getLogger(__name__)
+
+# What turn 1 reads, and the column lists it reads with. The two catalog lists overlap but
+# neither contains the other: turn 1 needs raw_label and nonzero_observations for
+# retrieval, CatalogSeriesSource needs source_hash, retrieved_at and cumulative_mode for
+# lineage. A catalog satisfying only one of them fails in the stage that uses the other.
+_TURN1_PROBES = (
+    ("series_catalog", TURN1_CATALOG_COLUMNS),
+    ("series_catalog", SERIES_SOURCE_COLUMNS),
+    ("series_observations", "series_id, period, value"),
+)
 
 _SSE_HEADERS = {
     "Cache-Control": "no-cache",
@@ -104,7 +117,20 @@ def _default_runner(config: Settings) -> AskRunner:
 
 
 def _turn1_catalog_ready(catalog: Path | str) -> bool:
-    """Require initialized, populated catalog and observation tables."""
+    """Whether turn 1 will reach its data, not merely whether a database exists.
+
+    The check this replaces asked only whether the two tables were present and held a row.
+    A catalog built one commit before `nonzero_observations` was added satisfies that and
+    then fails inside the first stage of every request: the stream opens a stage, reports a
+    tool, and dies. On a demo that reads as a broken product, where an honest "unavailable"
+    reads as a deployment nobody has fed yet - so a readiness check weaker than what the
+    turn requires is worse than having none.
+
+    Each column requirement is probed by running the real query with LIMIT 0. Binding
+    happens before execution, so a missing column raises here rather than mid-stream, and
+    no row is read. The column lists are imported from the modules that query with them:
+    keeping a copy here is exactly how this check and turn 1 drifted apart.
+    """
     if not Path(catalog).is_file():
         return False
     try:
@@ -117,11 +143,38 @@ def _turn1_catalog_ready(catalog: Path | str) -> bool:
                 ).fetchall()
             }
             if not {"series_catalog", "series_observations"} <= tables:
+                logger.warning("Catalog is missing tables turn 1 reads: %s", tables)
                 return False
-            return all(
-                connection.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() is not None
+
+            for table, columns in _TURN1_PROBES:
+                connection.execute(f"SELECT {columns} FROM {table} LIMIT 0").fetchall()
+
+            if any(
+                connection.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() is None
                 for table in ("series_catalog", "series_observations")
-            )
+            ):
+                logger.warning("Catalog tables are present but empty")
+                return False
+
+            # Turn 1 resolves its rate series by retrieval and then requires the result to
+            # be this one, so a catalog without it fails the turn no matter what else it
+            # holds. Presence here is necessary, not sufficient - retrieval could still
+            # land elsewhere - but it is the part that can be settled without running the
+            # 872-concept resolution that turn 1 runs anyway.
+            covered = connection.execute(
+                "SELECT 1 FROM series_observations WHERE series_id = ? "
+                "AND period BETWEEN ? AND ? AND value IS NOT NULL LIMIT 1",
+                [RATE_SERIES_ID, WINDOW_START, WINDOW_END],
+            ).fetchone()
+            if covered is None:
+                logger.warning(
+                    "Catalog has no %s observations in %s..%s; turn 1 cannot be answered",
+                    RATE_SERIES_ID,
+                    WINDOW_START,
+                    WINDOW_END,
+                )
+                return False
+            return True
         finally:
             connection.close()
     except Exception:

@@ -13,10 +13,17 @@ data/bronze/*
 data/silver/*
 data/gold/*
 !data/**/.gitkeep
+data/SNAPSHOT.md
 *.parquet
 *.duckdb
 *.duckdb.wal
 .lancedb/
+
+# Release archives from scripts/package_snapshot.py. A snapshot is ~70 MB; it is
+# distributed as a GitHub release asset, never committed.
+dist/
+*.tgz
+*.tar.gz
 
 # --- Python ---
 __pycache__/

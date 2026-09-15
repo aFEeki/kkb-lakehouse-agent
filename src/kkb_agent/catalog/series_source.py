@@ -16,7 +16,10 @@ import duckdb
 
 from kkb_agent.agent.handlers import LoadedSeries
 
-_COLUMNS = (
+# Public because the API's readiness check probes this exact list against the deployed
+# catalog. It has to read the requirement from the code that holds it rather than keep its
+# own copy - a second copy is what let a catalog missing a column be declared ready.
+CATALOG_COLUMNS = (
     "series_id, source, name_tr, measure_type, unit_raw, unit_normalized, scale_factor, "
     "native_freq, aggregation_rule, sector_scope, province, currency_basis, "
     "source_hash, retrieved_at, cumulative_mode"
@@ -55,7 +58,8 @@ class CatalogSeriesSource:
     def fetch(self, series_reference: str) -> LoadedSeries | None:
         con = self._connect()
         meta = con.execute(
-            f"SELECT {_COLUMNS} FROM series_catalog WHERE series_id = ?", [series_reference]
+            f"SELECT {CATALOG_COLUMNS} FROM series_catalog WHERE series_id = ?",
+            [series_reference],
         ).fetchone()
         if meta is None:
             return None
