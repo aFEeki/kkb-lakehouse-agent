@@ -45,6 +45,16 @@ from kkb_agent.tools.url_agent.ocr import (
     strip_layout_tags,
 )
 from kkb_agent.tools.url_agent.pdf import extract_pdf
+from kkb_agent.tools.url_agent.render import (
+    DEFAULT_RENDER_TIMEOUT_MS,
+    PageResult,
+    PlaywrightRenderer,
+    RenderDecision,
+    Renderer,
+    RenderError,
+    RendererUnavailableError,
+    read_page,
+)
 from kkb_agent.tools.url_agent.router import (
     GENERIC_MEDIA_TYPES,
     MEDIA_TYPE_KINDS,
@@ -58,6 +68,7 @@ __all__ = [
     "DEFAULT_ACCEPTED_KINDS",
     "DEFAULT_LIMITS",
     "DEFAULT_MAX_HOPS",
+    "DEFAULT_RENDER_TIMEOUT_MS",
     "GENERIC_MEDIA_TYPES",
     "MAX_IMAGES_PER_CALL",
     "MEDIA_TYPE_KINDS",
@@ -78,6 +89,12 @@ __all__ = [
     "ExtractionLimits",
     "MIAOCRBackend",
     "OCRBackend",
+    "PageResult",
+    "PlaywrightRenderer",
+    "RenderDecision",
+    "RenderError",
+    "Renderer",
+    "RendererUnavailableError",
     "OCRBackendError",
     "OCRCache",
     "PDFTextLayerMissingError",
@@ -94,6 +111,7 @@ __all__ = [
     "extract_pdf",
     "extract_text",
     "ocr_images",
+    "read_page",
     "score_link",
     "sniff_kind",
     "strip_layout_tags",
