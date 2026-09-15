@@ -59,15 +59,24 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tolerance", type=float, default=TOLERANCE_PCT)
     ap.add_argument("--show", type=int, default=5, help="worst N deviations to print")
+    # So CI can point the same check at the committed fixture instead of the full lake,
+    # which it does not have. The check itself is identical either way (SCRUM-32).
+    ap.add_argument("--bronze", type=Path, default=BRONZE, help="FinTürk bronze directory")
+    ap.add_argument(
+        "--min-provinces",
+        type=int,
+        default=1,
+        help="fail if fewer province-quarters were compared (guards a vacuous pass)",
+    )
     a = ap.parse_args()
 
-    if not BRONZE.exists():
+    if not a.bronze.exists():
         print("FinTürk bronze not acquired; nothing to check.")
         return 0
 
     checked, breaches, worst = 0, [], []
 
-    for period_dir in sorted(p for p in BRONZE.iterdir() if p.is_dir()):
+    for period_dir in sorted(p for p in a.bronze.iterdir() if p.is_dir()):
         p6, p1 = load(period_dir / "tablo6.json"), load(period_dir / "tablo1.json")
         if p6 is None or p1 is None:
             continue
@@ -91,8 +100,11 @@ def main() -> int:
             if drift > a.tolerance:
                 breaches.append((drift, period_dir.name, province))
 
-    if not checked:
-        print("No comparable province found. Is table 1 or table 6 missing?")
+    if checked < a.min_provinces:
+        print(
+            f"FAIL: {checked:,} province-quarters compared, expected at least "
+            f"{a.min_provinces:,}. Is table 1 or table 6 missing? Nothing was verified."
+        )
         return 1
 
     worst.sort(reverse=True)

@@ -81,15 +81,24 @@ def main() -> int:
     ap.add_argument("--rel", type=float, default=REL_TOLERANCE_PCT)
     ap.add_argument("--abs", dest="abs_tol", type=float, default=ABS_TOLERANCE)
     ap.add_argument("--show", type=int, default=10)
+    # So CI can point the same check at the committed fixture instead of the full lake,
+    # which it does not have. The check itself is identical either way (SCRUM-32).
+    ap.add_argument("--bronze", type=Path, default=BRONZE, help="BDDK aylık bronze directory")
+    ap.add_argument(
+        "--min-comparisons",
+        type=int,
+        default=1,
+        help="fail if fewer comparisons than this were possible (guards a vacuous pass)",
+    )
     a = ap.parse_args()
 
-    if not BRONZE.exists():
+    if not a.bronze.exists():
         print("BDDK monthly bronze not acquired; nothing to check.")
         return 0
 
     by_row: dict[tuple[int, str], dict[str, pd.Series]] = defaultdict(dict)
     skipped_non_additive = 0
-    for meta, series in iter_bddk_aylik(BRONZE):
+    for meta, series in iter_bddk_aylik(a.bronze):
         if meta.measure_type not in ADDITIVE:
             skipped_non_additive += 1
             continue
@@ -145,6 +154,19 @@ def main() -> int:
         checked += n
         status = "OK" if over == 0 else f"{over} BREACH"
         print(f"{status:<10} {n:>7,} comparisons   worst material gap {largest:7.3f}%   {label}")
+
+    # A partition with a missing child is skipped, not failed - so a bug that collapses
+    # the ten scopes into one leaves nothing to compare and this check reports OK for
+    # zero comparisons. That is the exact bug it was written to catch (SCRUM-98), so the
+    # count is part of the assertion: "nothing disagreed" is only reassuring alongside
+    # "and there was something to disagree".
+    if checked < a.min_comparisons:
+        print(
+            f"\nFAIL: only {checked:,} comparisons, expected at least "
+            f"{a.min_comparisons:,}. The scopes are not being kept apart, so there is "
+            "nothing to check rather than nothing wrong."
+        )
+        return 1
 
     print(f"\nchecked            : {checked:,} comparisons")
     print(f"non-additive rows  : {skipped_non_additive:,} skipped (rate/ratio/index)")
