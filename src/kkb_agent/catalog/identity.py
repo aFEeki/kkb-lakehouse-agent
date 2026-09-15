@@ -42,9 +42,28 @@ def turkish_casefold(s: str) -> str:
     Python's str.lower() maps 'I' to 'i' where Turkish needs 'ı', and leaves a combining
     dot on 'İ'. Any key comparison routed through .lower() silently fails to match, so
     every comparison in the catalog goes through this instead.
+
+    Composed first: the same 'İ' arrives precomposed from one source and as 'I' plus a
+    combining dot from another, and only the precomposed form matches the replacement.
     """
-    s = s.replace("İ", "i").replace("I", "ı")
+    s = unicodedata.normalize("NFC", s).replace("İ", "i").replace("I", "ı")
     return unicodedata.normalize("NFC", s.lower())
+
+
+def slugify(text: str) -> str:
+    """The one slug policy for every source's series id.
+
+    Three sources had grown three policies, each wrong in its own way: stripping every
+    character outside [a-z0-9] deleted the Turkish letters and turned "Tüketici Kredileri
+    - Konut" into "t_ketici_kredileri_konut", while .lower() and .casefold() left a
+    combining dot behind on 'İ' and produced ids like "c)_i̇htiyaç_tp" carrying an
+    invisible character and a stray bracket.
+
+    Neither broke a lookup - ids are written once and passed by reference - but an
+    identifier nobody can retype is a trap, and three policies mean the next id built by
+    hand matches none of them. Turkish letters are kept, everything else separates.
+    """
+    return re.sub(r"\W+", "_", turkish_casefold(text), flags=re.UNICODE).strip("_")
 
 
 def normalise_label(label: str) -> str:
@@ -77,7 +96,7 @@ class SeriesIdentity:
 
     @property
     def series_id(self) -> str:
-        slug = re.sub(r"[^a-z0-9]+", "_", turkish_casefold(self.normalised_label)).strip("_")
+        slug = slugify(self.normalised_label)
         return f"{self.source}.t{self.table_no:02d}.taraf{self.taraf}.{slug}"
 
     @property

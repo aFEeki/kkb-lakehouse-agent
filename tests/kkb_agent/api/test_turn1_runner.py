@@ -24,6 +24,40 @@ needs_catalog = pytest.mark.skipif(
 
 QUESTION = "Konut kredisi faizleri düştüğü halde kredi hacmi neden artmadı?"
 
+RATE_SERIES_ID = "evds.TP.KTF12"
+
+
+def _derived_catalog(tmp_path, *, drop_column=None, drop_rate=False):
+    """A copy of the gold catalog with one thing turn 1 needs taken away.
+
+    Built from the real catalog rather than hand-rolled so the fixture cannot drift from
+    the schema: every column except the dropped one is whatever gold actually has.
+    """
+    database = tmp_path / f"derived-{drop_column or 'rate'}.duckdb"
+    source = duckdb.connect(str(GOLD), read_only=True)
+    columns = [
+        row[0]
+        for row in source.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'series_catalog' ORDER BY ordinal_position"
+        ).fetchall()
+        if row[0] != drop_column
+    ]
+    source.close()
+
+    connection = duckdb.connect(str(database))
+    connection.execute(f"ATTACH '{GOLD}' AS gold (READ_ONLY)")
+    connection.execute(
+        f"CREATE TABLE series_catalog AS SELECT {', '.join(columns)} FROM gold.series_catalog"
+    )
+    predicate = "WHERE series_id <> ?" if drop_rate else ""
+    connection.execute(
+        f"CREATE TABLE series_observations AS SELECT * FROM gold.series_observations {predicate}",
+        [RATE_SERIES_ID] if drop_rate else [],
+    )
+    connection.close()
+    return database
+
 
 def _parse_sse(response):
     return tuple(
@@ -138,6 +172,53 @@ class TestAppWiring:
         connection.execute(OBSERVATIONS_DDL)
         connection.close()
         assert _turn1_catalog_ready(database) is False
+
+    @needs_catalog
+    @pytest.mark.parametrize(
+        "drop_column,drop_rate,why",
+        [
+            ("nonzero_observations", False, "turn 1 retrieval reads it"),
+            ("raw_label", False, "turn 1 retrieval reads it"),
+            ("source_hash", False, "CatalogSeriesSource reads it for lineage"),
+            (None, True, "turn 1 requires this exact rate series"),
+        ],
+    )
+    def test_a_catalog_short_of_what_turn_one_needs_is_not_ready(
+        self, tmp_path, drop_column, drop_rate, why
+    ):
+        """The published data snapshot was built one commit before `nonzero_observations`
+        existed. The old check - tables present, at least one row - passed it, so the API
+        declared itself ready and every request opened a stage and then died inside it.
+
+        Each case here is a catalog that the old check accepted and turn 1 cannot use. The
+        two column lists overlap without either containing the other, so a catalog can
+        satisfy one stage's query and fail the next one's.
+        """
+        database = _derived_catalog(tmp_path, drop_column=drop_column, drop_rate=drop_rate)
+        assert _turn1_catalog_ready(database) is False, why
+
+    @needs_catalog
+    def test_an_unusable_catalog_never_opens_a_stage_it_cannot_finish(self, tmp_path):
+        """Refusing up front and failing mid-stream are both "no answer", but only one of
+        them looks like a broken product. Nothing may start that cannot finish."""
+        from kkb_agent.config import Settings
+
+        database = _derived_catalog(tmp_path, drop_column="nonzero_observations")
+        client = TestClient(create_app(Settings(duckdb_path=database)))
+        response = client.post(
+            "/ask", json={"analysis_id": "a", "version": 0, "question": QUESTION}
+        )
+        types = [
+            line.split(": ", 1)[1]
+            for line in response.text.splitlines()
+            if line.startswith("event:")
+        ]
+        assert types == ["error", "completion"]
+
+    @needs_catalog
+    def test_the_real_catalog_is_ready(self):
+        """The guard against writing a check so strict it rejects working data."""
+        assert _turn1_catalog_ready(GOLD) is True
 
     @needs_catalog
     def test_ask_streams_server_sent_events(self):

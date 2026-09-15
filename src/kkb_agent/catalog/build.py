@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from kkb_agent.catalog.identity import identify, normalise_label, turkish_casefold
+from kkb_agent.catalog.identity import identify, normalise_label, slugify, turkish_casefold
 from kkb_agent.catalog.schema import (
     COUNT_UNITS,
     UNIT_SCALE,
@@ -448,7 +448,7 @@ def iter_bddk_haftalik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
         )
         unit_norm, scale = normalise_unit(bits["unit_raw"])
         measure = _measure_from(statement, bits["unit_raw"])
-        slug = normalise_label(f"{label} {col}").casefold().replace(" ", "_")
+        slug = slugify(normalise_label(f"{label} {col}"))
         yield (
             SeriesMeta(
                 series_id=f"bddk_haftalik.{currency}.t{table_id}.{slug}"[:200],
@@ -513,7 +513,7 @@ def iter_bddk_finturk(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
         column_unit, column_measure = FINTURK_T06_COLUMN.get(col, ("", None))
         unit_norm, scale = normalise_unit(column_unit or bits["unit_raw"])
         measure = column_measure or _measure_from(statement, bits["unit_raw"])
-        slug = normalise_label(f"{col} {province} {group}").lower().replace(" ", "_")
+        slug = slugify(normalise_label(f"{col} {province} {group}"))
         yield (
             SeriesMeta(
                 series_id=f"bddk_finturk.t{table_no:02d}.{slug}"[:200],
