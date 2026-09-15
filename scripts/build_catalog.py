@@ -57,6 +57,7 @@ EVDS_CONFIG = ROOT / "config" / "evds-series.json"
 # code, so nothing downstream treats a failed build as a good one.
 INVARIANT_CHECKS = [
     ("de-cumulation closes (I1)", "check_decumulation.py"),
+    ("sign and classification (I2, I3)", "check_cumulative_consistency.py"),
     ("bank-group partitions (I6)", "check_taraf_partitions.py"),
     ("FinTürk units (I4)", "check_finturk_units.py"),
 ]
@@ -68,7 +69,7 @@ def check_arguments(script: str, *, bronze: Path, catalog: Path) -> list[str]:
     Without this each check reads its own default path, so a fixture build would report
     on the full lake - green for data the build never touched (SCRUM-32).
     """
-    if script == "check_decumulation.py":
+    if script in ("check_decumulation.py", "check_cumulative_consistency.py"):
         return ["--db", str(catalog)]
     if script == "check_taraf_partitions.py":
         return ["--bronze", str(bronze / "aylik")]

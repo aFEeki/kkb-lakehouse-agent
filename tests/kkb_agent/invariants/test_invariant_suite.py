@@ -8,7 +8,7 @@ The `invariant` marker already existed in pyproject and nothing carried it, so
 `pytest -m invariant` selected zero tests and passed. A green no-op is worse than no
 check, because it is indistinguishable from a real one on the status page.
 
-These run the same three scripts the gold build gates on, against a 1.8 MB slice of real
+These run the same scripts the gold build gates on, against a 1.8 MB slice of real
 bronze committed under tests/fixtures/invariants. Real published data, not synthetic: an
 invariant that holds on numbers we invented proves nothing about the numbers we serve.
 
@@ -35,6 +35,12 @@ SCRIPTS = ROOT / "scripts"
 MIN_PARTITION_COMPARISONS = 3_000  # observed 3,489
 MIN_SERIES_YEARS = 400  # observed 467
 MIN_PROVINCE_QUARTERS = 150  # observed 162
+MIN_CUMULATIVE_SERIES = 400  # observed 468 testable year-to-date series
+
+# The fixture's own pattern/accounting disagreements, which are a subset of the full
+# catalog's 129 because it holds two tables rather than seventeen. A ceiling, not a floor:
+# the point is that a change cannot introduce new ones unnoticed.
+FIXTURE_DISAGREEMENTS = 36
 
 needs_fixture = pytest.mark.skipif(not FIXTURE.exists(), reason="invariant fixture not committed")
 
@@ -88,6 +94,22 @@ class TestTheInvariantSuite:
         )
         assert done.returncode == 0, done.stdout + done.stderr
 
+    def test_sign_and_classification_hold(self, catalog):
+        """I2 and I3. I1 cannot catch a misclassification - de-cumulating and re-summing
+        is a telescoping identity that holds whichever mode a series was given, so a
+        series wrongly marked year-to-date closes just as neatly as a right one. These are
+        the checks that look at whether the mode itself is defensible."""
+        done = run(
+            "check_cumulative_consistency.py",
+            "--db",
+            str(catalog),
+            "--max-disagreements",
+            str(FIXTURE_DISAGREEMENTS),
+            "--min-checked",
+            str(MIN_CUMULATIVE_SERIES),
+        )
+        assert done.returncode == 0, done.stdout + done.stderr
+
     def test_every_bank_group_partition_closes(self):
         """I6: BDDK's ten taraf scopes form three partitions of the sector, and each must
         sum back to its parent. Needs no second source - the publisher's own arithmetic
@@ -137,3 +159,24 @@ def test_a_check_that_compares_nothing_is_a_failure_not_a_pass():
     )
     assert done.returncode == 1
     assert "nothing to check rather than nothing wrong" in done.stdout
+
+
+@pytest.mark.invariant
+@needs_fixture
+def test_a_new_classification_disagreement_fails_the_build(catalog):
+    """The half of I3 that earns its keep.
+
+    `resolve_by_statement` never consults the statement kind once the pattern is
+    confident, by design - data contradicting the accounting is information, not noise.
+    But nothing reported it, so the information went nowhere. Demanding fewer
+    disagreements than exist reaches the same guard a newly-introduced one would.
+    """
+    done = run(
+        "check_cumulative_consistency.py",
+        "--db",
+        str(catalog),
+        "--max-disagreements",
+        "0",
+    )
+    assert done.returncode == 1
+    assert "above the recorded baseline" in done.stdout
