@@ -81,6 +81,25 @@ BDDK_AYLIK_STATEMENT: dict[int, StatementKind] = {
 INCOME_LINES_ON_BALANCE_SHEET = {"dönem karı (zararı)", "dönem net karı (zararı)"}
 
 
+def verifier_for(pattern_mode: CumulativeMode, resolved: CumulativeMode) -> str:
+    """Which mechanism settled a series' cumulative mode.
+
+    SCRUM-31 gates gold on this field: a series whose mode nothing established must not be
+    served, because de-cumulating on a guess produces numbers that look plausible and are
+    wrong. `cumulative_evidence` records *what was observed*; this records *what decided*,
+    and only the second can be checked mechanically.
+
+    Empty when nothing settled it. A series still AMBIGUOUS after both passes has not been
+    verified by anything, and saying so is the entire point of the field - populating it
+    with a label anyway would defeat the check it exists to support.
+    """
+    if resolved is CumulativeMode.AMBIGUOUS:
+        return ""
+    if pattern_mode is not CumulativeMode.AMBIGUOUS:
+        return "pattern"
+    return "statement"
+
+
 def resolve_by_statement(
     table_no: int,
     label: str,

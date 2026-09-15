@@ -38,6 +38,7 @@ from kkb_agent.transform.cumulative import (
     classify,
     decumulate,
     resolve_by_statement,
+    verifier_for,
 )
 from kkb_agent.transform.haftalik_html import extract as extract_weekly
 
@@ -377,6 +378,7 @@ def iter_bddk_aylik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 scale_factor=scale,
                 cumulative_mode=mode,
                 cumulative_evidence=f"{ev.summary()[:180]} || {why}",
+                cumulative_verified_by=verifier_for(ev.mode, mode),
                 native_freq=Frequency.MONTHLY,
                 aggregation_rule=default_aggregation(measure),
                 coverage_start=s.index.min().date(),
@@ -464,6 +466,7 @@ def iter_bddk_haftalik(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 scale_factor=scale,
                 cumulative_mode=mode,
                 cumulative_evidence=why,
+                cumulative_verified_by=verifier_for(CumulativeMode.AMBIGUOUS, mode),
                 native_freq=Frequency.WEEKLY,
                 aggregation_rule=default_aggregation(measure),
                 coverage_start=s.index.min().date(),
@@ -530,6 +533,7 @@ def iter_bddk_finturk(bronze: Path) -> Iterator[tuple[SeriesMeta, pd.Series]]:
                 scale_factor=scale,
                 cumulative_mode=mode,
                 cumulative_evidence=why,
+                cumulative_verified_by=verifier_for(CumulativeMode.AMBIGUOUS, mode),
                 native_freq=Frequency.QUARTERLY,
                 aggregation_rule=default_aggregation(measure),
                 coverage_start=s.index.min().date(),
@@ -639,6 +643,9 @@ def iter_evds(silver: Path, config: Path | None = None) -> Iterator[tuple[Series
                 # EVDS publishes levels and rates, not year-to-date accumulations.
                 cumulative_mode=CumulativeMode.NONE,
                 cumulative_evidence="EVDS publishes levels and rates, not accumulations",
+                # Not inferred from the data or the statement kind: it is what the source
+                # publishes, which is a stronger warrant than either.
+                cumulative_verified_by="source-definition",
                 unit_raw=unit_raw,
                 unit_normalized=unit_norm,
                 scale_factor=scale,
