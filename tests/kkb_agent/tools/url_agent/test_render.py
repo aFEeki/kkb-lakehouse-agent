@@ -51,8 +51,9 @@ class FakeRenderer:
         self.html = html
         self.urls: list[str] = []
 
-    def render(self, url: str) -> str:
+    def render(self, url: str, *, timeout_ms: int | None = None) -> str:
         self.urls.append(url)
+        self.timeout_ms = timeout_ms
         return self.html.decode()
 
 

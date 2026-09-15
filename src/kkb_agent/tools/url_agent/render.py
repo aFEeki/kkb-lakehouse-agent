@@ -9,6 +9,7 @@ from typing import Protocol
 from kkb_agent.frame._base import Contract
 from kkb_agent.tools.url_agent.models import DocumentKind, URLAgentError, URLDocument
 from kkb_agent.tools.url_agent.router import ContentTypeRouter
+from kkb_agent.tools.url_agent.timeouts import Deadline
 from kkb_agent.tools.url_safety import UntrustedContent
 
 DEFAULT_RENDER_TIMEOUT_MS = 15_000
@@ -23,9 +24,13 @@ class RendererUnavailableError(RenderError):
 
 
 class Renderer(Protocol):
-    """Returns the DOM of a page after its scripts have run."""
+    """Returns the DOM of a page after its scripts have run.
 
-    def render(self, url: str) -> str: ...
+    `timeout_ms` is part of the contract: a renderer that cannot be bounded is exactly
+    what a turn budget has to rule out.
+    """
+
+    def render(self, url: str, *, timeout_ms: int | None = None) -> str: ...
 
 
 class RenderDecision(Contract):
@@ -55,7 +60,7 @@ class PlaywrightRenderer:
     timeout_ms: int = DEFAULT_RENDER_TIMEOUT_MS
     wait_for_selector: str | None = None
 
-    def render(self, url: str) -> str:
+    def render(self, url: str, *, timeout_ms: int | None = None) -> str:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError as exc:
@@ -64,16 +69,20 @@ class PlaywrightRenderer:
                 "`python -m playwright install chromium`"
             ) from exc
 
+        budget = self.timeout_ms if timeout_ms is None else min(self.timeout_ms, timeout_ms)
+        if budget <= 0:
+            raise RenderError(f"Rendering {url!r} was not started: no time was left for it")
+
         try:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(headless=True)
                 try:
                     page = browser.new_page()
-                    page.goto(url, timeout=self.timeout_ms, wait_until="domcontentloaded")
+                    page.goto(url, timeout=budget, wait_until="domcontentloaded")
                     if self.wait_for_selector:
-                        page.wait_for_selector(self.wait_for_selector, timeout=self.timeout_ms)
+                        page.wait_for_selector(self.wait_for_selector, timeout=budget)
                     else:
-                        page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
+                        page.wait_for_load_state("networkidle", timeout=budget)
                     return page.content()
                 finally:
                     browser.close()
@@ -90,6 +99,7 @@ def read_page(
     router: ContentTypeRouter,
     renderer: Renderer | None = None,
     is_sufficient: Callable[[URLDocument], bool] | None = None,
+    deadline: Deadline | None = None,
 ) -> PageResult:
     """Read one page, rendering it only when the static response falls short.
 
@@ -103,6 +113,8 @@ def read_page(
     must not guess that a page is "probably incomplete".
     """
 
+    if deadline is not None:
+        deadline.require(f"fetching {url!r}")
     static = router.route(fetcher.fetch(url))
 
     if is_sufficient is None:
@@ -131,7 +143,11 @@ def read_page(
             "renderer was supplied"
         )
 
-    html = renderer.render(static.final_url)
+    timeout_ms: int | None = None
+    if deadline is not None:
+        remaining = deadline.require(f"rendering {static.final_url!r}", partial=static)
+        timeout_ms = int(remaining * 1000)
+    html = renderer.render(static.final_url, timeout_ms=timeout_ms)
     rendered = router.route(
         UntrustedContent(
             requested_url=static.requested_url,

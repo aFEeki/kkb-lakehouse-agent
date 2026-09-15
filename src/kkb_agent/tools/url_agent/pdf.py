@@ -19,6 +19,7 @@ from kkb_agent.tools.url_agent.models import (
     URLDocument,
 )
 from kkb_agent.tools.url_agent.ocr import OCRBackend, OCRCache, ocr_images
+from kkb_agent.tools.url_agent.timeouts import Deadline, ToolTimeoutError
 from kkb_agent.tools.url_safety import UntrustedContent
 
 RENDER_SCALE = 2.0
@@ -30,6 +31,7 @@ def extract_pdf(
     ocr: OCRBackend | None = None,
     cache: OCRCache | None = None,
     limits: ExtractionLimits = DEFAULT_LIMITS,
+    deadline: Deadline | None = None,
 ) -> URLDocument:
     """Read a PDF with pypdf, using OCR only for a document with no text layer.
 
@@ -56,13 +58,30 @@ def extract_pdf(
             "OCR backend was supplied to read it"
         )
 
+    if deadline is not None:
+        deadline.require(f"rendering {len(raw_pages)} PDF page(s) for OCR")
     images = _render_pages(content.body)
-    texts = ocr_images(images, ocr, cache)
+
+    notes = ("PDF had no text layer; text was read by OCR and may contain reading errors.",)
+    try:
+        texts = ocr_images(images, ocr, cache, deadline=deadline)
+    except ToolTimeoutError as expired:
+        # Pages already read are worth more than a bare failure, as long as the document
+        # says plainly that it is incomplete.
+        partial = expired.partial
+        if not isinstance(partial, tuple) or not any(partial):
+            raise
+        texts = partial
+        read = sum(1 for text in texts if text)
+        notes += (
+            f"Timed out during OCR: {read} of {len(texts)} page(s) were read; the rest are "
+            "missing, not empty.",
+        )
+
     pages = tuple(
         ExtractedPage(page_number=number, text=text, extraction_method="unlimited-ocr")
         for number, text in enumerate(texts, start=1)
     )
-    notes = ("PDF had no text layer; text was read by OCR and may contain reading errors.",)
     return _document(content, pages, "unlimited-ocr", limits, notes=notes)
 
 

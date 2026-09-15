@@ -7,7 +7,10 @@ import hashlib
 import re
 from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from kkb_agent.tools.url_agent.timeouts import Deadline
 
 from kkb_agent.tools.url_agent.handlers import DEFAULT_LIMITS, ExtractionLimits, content_sha256
 from kkb_agent.tools.url_agent.models import (
@@ -119,9 +122,18 @@ class OCRCache:
 
 
 def ocr_images(
-    images: Sequence[bytes], ocr: OCRBackend, cache: OCRCache | None = None
+    images: Sequence[bytes],
+    ocr: OCRBackend,
+    cache: OCRCache | None = None,
+    *,
+    deadline: Deadline | None = None,
 ) -> tuple[str, ...]:
-    """Read every image, reusing cached text and batching within the model's image limit."""
+    """Read every image, reusing cached text and batching within the model's image limit.
+
+    With a `deadline`, the budget is checked before each call. Running out raises
+    `ToolTimeoutError` carrying the pages already read on `partial`, so a caller can show
+    an incomplete document and say so rather than discarding the work.
+    """
 
     cache = cache if cache is not None else OCRCache()
     hashes = [hashlib.sha256(image).hexdigest() for image in images]
@@ -130,6 +142,11 @@ def ocr_images(
     pending = [index for index, value in enumerate(results) if value is None]
     for start in range(0, len(pending), MAX_IMAGES_PER_CALL):
         batch = pending[start : start + MAX_IMAGES_PER_CALL]
+        if deadline is not None:
+            deadline.require(
+                f"OCR of image {batch[0] + 1} of {len(images)}",
+                partial=tuple(value or "" for value in results),
+            )
         returned = ocr.read_page_images([images[index] for index in batch])
         if len(returned) != len(batch):
             raise OCRBackendError(
