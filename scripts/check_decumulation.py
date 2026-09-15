@@ -45,6 +45,12 @@ def main() -> int:
     ap.add_argument("--db", type=Path, default=GOLD)
     ap.add_argument("--tolerance", type=float, default=TOLERANCE)
     ap.add_argument("--show", type=int, default=10)
+    ap.add_argument(
+        "--min-series-years",
+        type=int,
+        default=1,
+        help="fail if fewer series-years were closed than this (guards a vacuous pass)",
+    )
     a = ap.parse_args()
 
     if not a.db.exists():
@@ -81,8 +87,14 @@ def main() -> int:
     ).fetchall()
 
     if not rows:
-        print(f"{total_ytd} accumulating series, but no complete year to close against.")
-        return 0
+        # Not "nothing wrong" - nothing checked. A transform that stopped classifying
+        # anything as accumulating would leave no year to close and, reported as a pass,
+        # would hide the very break this exists to catch.
+        print(
+            f"FAIL: {total_ytd} accumulating series, but no complete year to close "
+            "against. Nothing was verified."
+        )
+        return 1
 
     breaches: list[tuple] = []
     incomplete = 0
@@ -107,6 +119,13 @@ def main() -> int:
     print(f"skipped, gap in year: {incomplete:,}")
     print(f"tolerance           : {a.tolerance:.3%}")
     print(f"worst drift         : {worst:.4%}")
+
+    if checked < a.min_series_years:
+        print(
+            f"\nFAIL: only {checked:,} series-years closed, expected at least "
+            f"{a.min_series_years:,}. Nothing was verified."
+        )
+        return 1
 
     if breaches:
         breaches.sort(reverse=True)

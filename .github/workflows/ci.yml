@@ -38,6 +38,14 @@ jobs:
       - name: Unit tests (no external credentials)
         run: python -m pytest -q
 
+      # SCRUM-32. Separate from the unit tests so a red invariant is legible on the status
+      # page as a data-correctness failure rather than one more failing test: these check
+      # that published figures still add up, which is the claim the whole project rests on.
+      # They run against the committed fixture under tests/fixtures/invariants, so they
+      # need no lake and no credentials.
+      - name: Data invariants
+        run: python -m pytest -m invariant -q
+
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15

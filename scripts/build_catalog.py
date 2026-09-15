@@ -62,7 +62,22 @@ INVARIANT_CHECKS = [
 ]
 
 
-def run_checks(root: Path) -> int:
+def check_arguments(script: str, *, bronze: Path, catalog: Path) -> list[str]:
+    """Point one check at the data just built, rather than at whatever is on disk.
+
+    Without this each check reads its own default path, so a fixture build would report
+    on the full lake - green for data the build never touched (SCRUM-32).
+    """
+    if script == "check_decumulation.py":
+        return ["--db", str(catalog)]
+    if script == "check_taraf_partitions.py":
+        return ["--bronze", str(bronze / "aylik")]
+    if script == "check_finturk_units.py":
+        return ["--bronze", str(bronze / "finturk")]
+    return []
+
+
+def run_checks(root: Path, *, bronze: Path = BRONZE, catalog: Path = GOLD) -> int:
     """Run every invariant check. Returns the number that failed."""
     import subprocess
 
@@ -74,7 +89,10 @@ def run_checks(root: Path) -> int:
             print(f"   SKIP  {title:<32} ({script} missing)")
             continue
         proc = subprocess.run(
-            [sys.executable, str(path)], capture_output=True, text=True, cwd=str(root)
+            [sys.executable, str(path), *check_arguments(script, bronze=bronze, catalog=catalog)],
+            capture_output=True,
+            text=True,
+            cwd=str(root),
         )
         ok = proc.returncode == 0
         failed += not ok
@@ -94,34 +112,40 @@ def main() -> int:
         action="store_true",
         help="write the catalog without running the invariant checks",
     )
+    # So CI can build from the committed fixture instead of the full lake, which it does
+    # not have. The build path is identical either way - what changes is only how much
+    # bronze it is pointed at (SCRUM-32).
+    ap.add_argument("--bronze", type=Path, default=BRONZE, help="BDDK bronze directory")
+    ap.add_argument("--silver", type=Path, default=SILVER, help="EVDS silver directory")
     a = ap.parse_args()
+    bronze, silver = a.bronze, a.silver
 
     t0 = time.time()
     pairs = []
 
-    if (BRONZE / "aylik").exists():
-        got = list(iter_bddk_aylik(BRONZE / "aylik"))
+    if (bronze / "aylik").exists():
+        got = list(iter_bddk_aylik(bronze / "aylik"))
         print(f"BDDK aylık   : {len(got):>6} series")
         pairs += got
     else:
         print("BDDK aylık   : not acquired")
 
-    if (BRONZE / "haftalik").exists():
-        got = list(iter_bddk_haftalik(BRONZE / "haftalik"))
+    if (bronze / "haftalik").exists():
+        got = list(iter_bddk_haftalik(bronze / "haftalik"))
         print(f"BDDK haftalık: {len(got):>6} series")
         pairs += got
     else:
         print("BDDK haftalık: not acquired")
 
-    if (BRONZE / "finturk").exists():
-        got = list(iter_bddk_finturk(BRONZE / "finturk"))
+    if (bronze / "finturk").exists():
+        got = list(iter_bddk_finturk(bronze / "finturk"))
         print(f"BDDK fintürk : {len(got):>6} series")
         pairs += got
     else:
         print("BDDK fintürk : not acquired")
 
-    if SILVER.exists():
-        got = list(iter_evds(SILVER, EVDS_CONFIG))
+    if silver.exists():
+        got = list(iter_evds(silver, EVDS_CONFIG))
         print(f"EVDS         : {len(got):>6} series")
         pairs += got
     else:
@@ -136,9 +160,9 @@ def main() -> int:
     # it, not which single file.
     print()
     for source, manifest in [
-        ("bddk_aylik", BRONZE / "manifest_aylik.jsonl"),
-        ("bddk_haftalik", BRONZE / "manifest_haftalik.jsonl"),
-        ("bddk_finturk", BRONZE / "manifest_finturk.jsonl"),
+        ("bddk_aylik", bronze / "manifest_aylik.jsonl"),
+        ("bddk_haftalik", bronze / "manifest_haftalik.jsonl"),
+        ("bddk_finturk", bronze / "manifest_finturk.jsonl"),
     ]:
         prov = bronze_provenance(manifest, source)
         if prov is None:
@@ -187,7 +211,10 @@ def main() -> int:
     print(f"\n{'=' * 72}")
     print(f"catalog      : {len(catalog):,} series")
     print(f"observations : {len(observations):,} rows")
-    print(f"built in     : {time.time() - t0:.1f}s -> {a.out.relative_to(ROOT)}")
+    # A fixture build writes to a temporary directory outside the repo, where
+    # relative_to would raise rather than print a path.
+    where = a.out.relative_to(ROOT) if a.out.is_relative_to(ROOT) else a.out
+    print(f"built in     : {time.time() - t0:.1f}s -> {where}")
     print("=" * 72)
 
     for title, sql in [
@@ -232,7 +259,7 @@ def main() -> int:
         print("\n--no-check: invariants not run. The catalog is unverified.")
         return 0
 
-    failed = run_checks(ROOT)
+    failed = run_checks(ROOT, bronze=bronze, catalog=a.out)
     if failed:
         print(f"\n{failed} invariant(s) FAILED. The catalog is written but must not be served.")
         return 1
