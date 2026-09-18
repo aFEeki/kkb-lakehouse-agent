@@ -138,7 +138,9 @@ def test_an_unrelated_initial_question_is_refused():
 
     events = asyncio.run(collect(TurnOneAskRunner(GOLD), question="Mevduat faizleri nedir?"))
     assert [event.type for event in events] == ["error", "completion"]
-    assert events[0].payload.code == "UNSUPPORTED_PUBLISHED_TURN"
+    # The refusal now comes from the router, which considered the question and found no
+    # tool for it, rather than from "this is not a published turn".
+    assert events[0].payload.code == "TOOL_REFUSED"
 
 
 class TestAppWiring:
@@ -448,7 +450,7 @@ def test_real_three_request_api_flow_uses_one_store(tmp_path):
             )
         )
         assert [event.type for event in unrelated] == ["error", "completion"]
-        assert unrelated[0].payload.code == "UNSUPPORTED_PUBLISHED_TURN"
+        assert unrelated[0].payload.code == "TOOL_REFUSED"
         assert unrelated[-1].frame_version == frame1.version
         second = _parse_sse(
             client.post(
@@ -481,3 +483,31 @@ def test_real_three_request_api_flow_uses_one_store(tmp_path):
     assert frame3.findings[-1].supersedes == "f-decline"
     assert frame3.findings[-1].spine_range is not None
     assert [event.type for event in third[-2:]] == ["result", "completion"]
+
+
+@needs_catalog
+class TestNonPublishedQuestionsReachTheRouter:
+    """Before this, anything outside the three demo intents was refused outright."""
+
+    @staticmethod
+    def _events(question: str):
+        import asyncio
+
+        return asyncio.run(collect(TurnOneAskRunner(GOLD), question=question))
+
+    def test_a_tool_question_selects_a_tool_instead_of_being_refused(self):
+        events = self._events("Konut kredisi bakiyesinde aykırı değer var mı?")
+        assert [e.payload.tool for e in events if e.type == "tool_selected"] == ["anomaly"]
+
+    def test_a_url_question_reports_the_contract_name_for_the_url_agent(self):
+        events = self._events("https://example.org/x.pdf oku")
+        assert [e.payload.tool for e in events if e.type == "tool_selected"] == ["web_url"]
+
+    def test_an_unroutable_question_still_refuses(self):
+        events = self._events("Bugün hava nasıl?")
+        assert [e.type for e in events] == ["error", "completion"]
+        assert events[0].payload.code == "TOOL_REFUSED"
+
+    def test_the_published_turn_is_untouched(self):
+        events = self._events(QUESTION)
+        assert events[-2].type == "result"

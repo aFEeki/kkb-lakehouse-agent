@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 
+from kkb_agent.agent.router import run_tool
 from kkb_agent.agent.turn1 import TurnResult, build_turn1
 from kkb_agent.agent.turn2 import TurnTwoResult, build_turn2
 from kkb_agent.agent.turn3 import HPI_KEY, TurnThreeResult, build_turn3
@@ -106,7 +107,14 @@ class TurnOneAskRunner:
             if any("deflated_by" in column.key for column in previous.columns)
             else 2
         )
+        if requested_turn is None:
+            # Not a published turn: hand it to the tool router rather than refusing.
+            async for event in self._route(request, sequence):
+                yield event
+            return
+
         if requested_turn != expected_turn:
+            # A real turn, asked out of order. Still a sequencing error, not a tool question.
             yield _error(
                 request,
                 sequence,
@@ -189,6 +197,63 @@ class TurnOneAskRunner:
         yield _result(request, sequence, result)
         sequence += 1
         yield _completion(request, sequence, "succeeded", result.frame.version)
+
+    async def _route(self, request: AskRequest, sequence: int):
+        """Hand a non-published question to the tool router and stream what it did."""
+        client = getattr(self._planner, "_mia_client", None)
+        run = await asyncio.to_thread(run_tool, request.question, self._catalog, mia_client=client)
+
+        # Only open a stage when a tool was actually selected: a stage that starts and
+        # immediately fails reads as a broken product, where a bare refusal reads as an
+        # answer.
+        if run.choice.tool is not None:
+            yield _stage_start(request, sequence, "agentic_analytics")
+            sequence += 1
+            yield _tool_selected(
+                request, sequence, _EVENT_NAME.get(run.choice.tool, run.choice.tool)
+            )
+            sequence += 1
+            yield _stage_end(
+                request, sequence, "agentic_analytics", "succeeded" if run.ran else "failed"
+            )
+            sequence += 1
+
+        # Tool results have no AnalysisFrame yet, and ResultPayload requires one - so the
+        # outcome is reported on the error channel rather than faked into a frame.
+        yield _error(
+            request,
+            sequence,
+            code="TOOL_RUN_NOT_RENDERABLE" if run.ran else "TOOL_REFUSED",
+            message=_tool_summary(run) if run.ran else (run.refusal or "Soru yanıtlanamadı."),
+            retryable=False,
+        )
+        yield _completion(request, sequence + 1, "failed", request.version)
+
+
+# The contract's tool vocabulary predates the router's; web_url is the same tool.
+_EVENT_NAME = {"url_agent": "web_url"}
+
+
+def _tool_summary(run) -> str:
+    """One Turkish line naming the tool, what it found, and on which series."""
+    kind = type(run.result).__name__
+    if kind == "AnomalyResult":
+        body = f"{len(run.result.anomalies)} aykırı gözlem ({run.result.observed_count} gözlemde)"
+    elif kind == "ChangeDetectionResult":
+        body = f"{len(run.result.breakpoints)} kırılma noktası"
+    elif kind == "CausalityResult":
+        body = f"nedensellik sonucu: {run.result.status}"
+    elif kind == "URLDocument":
+        body = f"belge okundu ({run.result.kind})"
+    elif kind == "LoadedSeries":
+        body = f"seri: {run.result.name}"
+    else:
+        body = kind
+    series = f" [{', '.join(run.series_ids)}]" if run.series_ids else ""
+    return (
+        f"{run.choice.tool} aracı çalıştı — {body}{series}. "
+        "Bu araç sonucu henüz tabloya dönüştürülmüyor."
+    )
 
 
 def answer_text(result: TurnResult | TurnTwoResult | TurnThreeResult, question: str) -> str:
