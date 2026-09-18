@@ -21,6 +21,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 
+from kkb_agent.agent.composition import create_operation_executor
 from kkb_agent.agent.router import run_tool, select_tool
 from kkb_agent.agent.turn1 import TurnResult, build_turn1
 from kkb_agent.agent.turn2 import TurnTwoResult, build_turn2
@@ -44,6 +45,13 @@ from kkb_agent.api.contracts import (
 from kkb_agent.api.frame_store import AnalysisFrameStore, AnalysisFrameStoreError
 from kkb_agent.catalog.identity import turkish_casefold
 from kkb_agent.catalog.series_source import CatalogSeriesSource
+from kkb_agent.frame import (
+    AddColumnParameters,
+    AnalysisFrame,
+    Operation,
+    OperationType,
+    Spine,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -252,13 +260,28 @@ class TurnOneAskRunner:
         )
         sequence += 1
 
+        # A tool that ran and produced a finding is an answer. Deliver it as one whenever
+        # the series it read can be put on a spine, so the reader gets the numbers behind
+        # the sentence instead of being told to take it on trust.
+        if run.ran:
+            frame = await asyncio.to_thread(_tool_frame, self._catalog, request.analysis_id, run)
+            if frame is not None:
+                self._frame_store.put(frame)
+                yield _frame_result(request, sequence, frame, _tool_summary(run))
+                yield _completion(request, sequence + 1, "succeeded", frame.version)
+                return
+
         # Tool results have no AnalysisFrame yet, and ResultPayload requires one - so the
         # outcome is reported on the error channel rather than faked into a frame.
         yield _error(
             request,
             sequence,
             code="TOOL_RUN_NOT_RENDERABLE" if run.ran else "TOOL_REFUSED",
-            message=_tool_summary(run) if run.ran else (run.refusal or "Soru yanıtlanamadı."),
+            message=(
+                f"{_tool_summary(run)} Bu araç sonucu henüz tabloya dönüştürülmüyor."
+                if run.ran
+                else (run.refusal or "Soru yanıtlanamadı.")
+            ),
             retryable=False,
         )
         yield _completion(request, sequence + 1, "failed", request.version)
@@ -266,6 +289,53 @@ class TurnOneAskRunner:
 
 # The contract's tool vocabulary predates the router's; web_url is the same tool.
 _EVENT_NAME = {"url_agent": "web_url"}
+
+
+def _tool_frame(catalog, analysis_id: str, run) -> AnalysisFrame | None:
+    """Put the series a tool actually read onto a spine, so its finding can be a result.
+
+    A tool answers about a series; without the series, the reader gets a sentence and no
+    way to check it. The columns are added through the ordinary `add_column` executor, so
+    the same lineage, left-join and spine guarantees apply as anywhere else — this is the
+    real table, not a display copy assembled for the occasion.
+    """
+    if not run.series_ids:
+        return None
+    source = CatalogSeriesSource(catalog)
+    try:
+        loaded = [source.fetch(series_id) for series_id in run.series_ids]
+        if any(item is None for item in loaded):
+            return None
+        periods = sorted({period for item in loaded for period in item.values})
+        if not periods:
+            return None
+
+        frame = AnalysisFrame(
+            frame_id=analysis_id, spine=Spine(values=tuple(periods), label="Dönem")
+        )
+        executor = create_operation_executor(series_source=source)
+        for index, series_id in enumerate(run.series_ids):
+            frame = executor.execute(
+                frame,
+                Operation(
+                    operation_id=f"tool-add-{index}",
+                    kind=OperationType.ADD_COLUMN,
+                    parameters=AddColumnParameters(
+                        series_reference=series_id, column_key=series_id
+                    ),
+                    timestamp=datetime.now(UTC),
+                    source_version=frame.version,
+                    resulting_version=frame.version + 1,
+                ),
+            )
+        return frame
+    except Exception:
+        # A tool finding is worth delivering even when the table cannot be built; the
+        # caller falls back to reporting the finding on its own.
+        logger.exception("could not build a frame for the %s tool run", run.choice.tool)
+        return None
+    finally:
+        source.close()
 
 
 def _tool_summary(run) -> str:
@@ -284,10 +354,7 @@ def _tool_summary(run) -> str:
     else:
         body = kind
     series = f" [{', '.join(run.series_ids)}]" if run.series_ids else ""
-    return (
-        f"{run.choice.tool} aracı çalıştı — {body}{series}. "
-        "Bu araç sonucu henüz tabloya dönüştürülmüyor."
-    )
+    return f"{run.choice.tool} aracı çalıştı — {body}{series}."
 
 
 def answer_text(result: TurnResult | TurnTwoResult | TurnThreeResult, question: str) -> str:
@@ -365,6 +432,17 @@ def _result(
         **_envelope(request, sequence, result.frame.version),
         type="result",
         payload=ResultPayload(frame=result.frame, answer=answer_text(result, request.question)),
+    )
+
+
+def _frame_result(
+    request: AskRequest, sequence: int, frame: AnalysisFrame, answer: str
+) -> ResultEvent:
+    """A result assembled from a frame and an answer, for paths with no TurnResult."""
+    return ResultEvent(
+        **_envelope(request, sequence, frame.version),
+        type="result",
+        payload=ResultPayload(frame=frame, answer=answer),
     )
 
 

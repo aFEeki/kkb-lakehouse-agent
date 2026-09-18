@@ -33,12 +33,19 @@ have one, so the backend has to deliver it on the error channel. The frontend wa
 painting it in the failure colours: the anomaly tool finding five outliers in sixty-six
 observations was presented to the reader as an error.
 
-`TOOL_RUN_NOT_RENDERABLE` is now rendered as ordinary answer text with a quiet line saying
-the result cannot be shown as a table yet. Nothing about the message is changed — it is the
-backend's own wording — only the claim the styling was making about it.
+So the backend now builds the frame. `_tool_frame` puts the series the tool actually read
+onto a spine and adds each one through the ordinary `add_column` executor — same lineage,
+same left join, same spine guarantees as any other column. The finding then goes out as a
+`result` with the series behind it, and the stream completes `succeeded`.
 
-The proper fix is still open: build a frame from the series the tool read, so the result
-goes out as a `result` event with the series as a column.
+Asking "is there anything unusual in the housing loan balance" now returns the anomaly
+tool's finding *and* the sixty-six observations it read, so the sentence can be checked
+rather than taken on trust.
+
+Where the frame cannot be built — a tool with no series, an unreadable one — the finding
+still goes out on the error channel with a line saying it cannot be shown as a table, and
+the frontend renders that as answer text rather than in failure colours. Losing the table
+is not the same as failing, and the two no longer look alike.
 
 ## Planning is bounded in wall-clock time
 
@@ -57,6 +64,6 @@ and 18.2 s, all of them planned by the model rather than the script.
 
 ## Still open
 
-Tool results have no frame, so they cannot carry a table. Table values render as raw floats
-(`18.387999999999998`). Questions outside the three published turns and the router's tools
-are still refused.
+Table values render as raw floats (`18.387999999999998`). Tool selection is a model call,
+so the same question can pick a tool on one run and refuse on the next. Questions outside
+the three published turns and the router's tools are still refused.
