@@ -91,6 +91,28 @@ def classify_published_turn(question: str) -> int | None:
     return None
 
 
+def _out_of_order_message(requested: int, expected: int) -> str:
+    """Say which step is missing, in the words the user would use to ask for it.
+
+    Turns 2 and 3 modify the table turn 1 builds, so asking for one first is not a
+    malformed request - it is a request that arrived early, and the reply should be the
+    sentence that gets the user unstuck.
+    """
+    ask_first = {
+        1: "2021-2025 arasında konut kredileri ve faiz oranlarını aylık göster.",
+        2: "Konut kredisi tutarlarını enflasyondan arındırır mısın?",
+    }
+    if requested > expected:
+        return (
+            f"Bu soru mevcut tabloyu değiştiriyor, ama o tablo henüz yok. "
+            f"Önce şunu sorun: “{ask_first[expected]}”"
+        )
+    return (
+        "Bu adım bu analizde zaten tamamlandı. Tabloyu sıfırdan kurmak için sayfayı "
+        "yenileyip ilk sorudan başlayın."
+    )
+
+
 class TurnOneAskRunner:
     """Runs turn 1 for any question and streams its stages.
 
@@ -140,12 +162,14 @@ class TurnOneAskRunner:
             return
 
         if requested_turn != expected_turn:
-            # A real turn, asked out of order. Still a sequencing error, not a tool question.
+            # A real turn, asked out of order. Still a sequencing error, not a tool
+            # question - so say which step is missing and what to ask for, rather than
+            # naming an internal concept the reader has no way to act on.
             yield _error(
                 request,
                 sequence,
                 code="UNSUPPORTED_PUBLISHED_TURN",
-                message="Bu soru mevcut analiz sürümü için desteklenen yayınlanmış tur değil.",
+                message=_out_of_order_message(requested_turn, expected_turn),
                 retryable=False,
             )
             yield _completion(request, sequence + 1, "failed", request.version)
@@ -370,7 +394,11 @@ def answer_text(result: TurnResult | TurnTwoResult | TurnThreeResult, question: 
         return f"Turn 2 tamamlandı: {derived.label} kolonu mevcut tabloya eklendi."
     if isinstance(result, TurnThreeResult):
         return result.frame.findings[-1].statement
-    if question.strip().casefold() != _question().strip().casefold():
+    # Disclose only when turn 1 ran for a question it does not actually cover. Comparing
+    # the wording verbatim fired on every paraphrase of the same question, so a correct
+    # answer to "konut kredileri ve faiz oranlarını göster" opened by telling the reader
+    # their question had not been answered - which was not true, and read as a failure.
+    if classify_published_turn(question) != 1:
         lines.append(
             f"Not: bu sürüm yalnızca şu soruyu yanıtlıyor — “{_question()}”. "
             "Sorduğunuz soru için henüz bir analiz üretilmiyor."
