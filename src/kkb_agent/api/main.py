@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from kkb_agent.agent.planner import OperationPlanner
 from kkb_agent.agent.turn1 import CATALOG_COLUMNS as TURN1_CATALOG_COLUMNS
 from kkb_agent.agent.turn1 import RATE_SERIES_ID, WINDOW_END, WINDOW_START
 from kkb_agent.api.contracts import (
@@ -29,8 +30,14 @@ from kkb_agent.catalog.duckdb_store import DuckDBStore
 from kkb_agent.catalog.lance_store import LanceStore
 from kkb_agent.catalog.series_source import CATALOG_COLUMNS as SERIES_SOURCE_COLUMNS
 from kkb_agent.config import Settings
+from kkb_agent.llm.client import MIAClient
 
 logger = logging.getLogger(__name__)
+
+# A key that is absent, or still the placeholder the example env ships with, means MIA was
+# never configured here. Constructing a planner against one costs three failed attempts per
+# request before the fallback runs; recognising it up front costs nothing.
+_PLACEHOLDER_KEY = "API_KEYINIZ"
 
 # What turn 1 reads, and the column lists it reads with. The two catalog lists overlap but
 # neither contains the other: turn 1 needs raw_label and nonzero_observations for
@@ -113,7 +120,27 @@ def _default_runner(config: Settings) -> AskRunner:
     if not _turn1_catalog_ready(catalog):
         logger.warning("Turn 1 catalog is not ready; /ask will report unavailable")
         return UnavailableAskRunner()
-    return TurnOneAskRunner(catalog)
+    return TurnOneAskRunner(catalog, planner=_planner_for(config))
+
+
+def _planner_for(config: Settings) -> OperationPlanner | None:
+    """The model planner when MIA is configured, None when it is not.
+
+    Nothing constructed one before, so every request served through the API ran the
+    scripted fallback: the planner existed and was tested, and the deployed system still
+    demonstrated a script rather than an agent. The answer said so plainly - `Plan: script`
+    on every response - which is the right disclosure and the wrong behaviour.
+
+    Absent credentials stay a deployment fact rather than an error. Turn 1 already falls
+    back to the scripted plan when the model is unreachable or returns a plan that does not
+    meet the turn's preconditions, so an unconfigured environment degrades to exactly the
+    previous behaviour instead of failing, and CI keeps running offline.
+    """
+    key = config.mia_api_key.get_secret_value().strip()
+    if not key or key == _PLACEHOLDER_KEY:
+        logger.warning("MIA is not configured; /ask will plan with the scripted fallback")
+        return None
+    return OperationPlanner(MIAClient(config))
 
 
 def _turn1_catalog_ready(catalog: Path | str) -> bool:

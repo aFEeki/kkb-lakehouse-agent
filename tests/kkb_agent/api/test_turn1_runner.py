@@ -242,6 +242,53 @@ class TestAppWiring:
         assert types[-2:] == ["result", "completion"]
 
 
+class TestThePlannerIsActuallyWiredIn:
+    """The planner existed, was tested, and nothing ever constructed one - so every
+    request served through the API ran the scripted fallback and the system demonstrated
+    a script rather than an agent. These assert the wiring, because a planner nobody
+    builds fails silently: the answers stay correct and only `planned_by` gives it away.
+    """
+
+    @staticmethod
+    def _settings(key: str, **kw):
+        from kkb_agent.config import Settings
+
+        return Settings(_env_file=None, mia_api_key=key, **kw)
+
+    def test_an_unconfigured_environment_plans_with_the_script(self):
+        """Absent credentials are a deployment fact, not an error - and this is what keeps
+        CI offline."""
+        from kkb_agent.api.main import _planner_for
+
+        assert _planner_for(self._settings("")) is None
+
+    def test_the_example_placeholder_key_does_not_count_as_configured(self):
+        """Left as shipped, it would cost three failed model attempts per request before
+        the fallback ran."""
+        from kkb_agent.api.main import _planner_for
+
+        assert _planner_for(self._settings("API_KEYINIZ")) is None
+
+    def test_a_configured_environment_builds_a_model_planner(self):
+        from kkb_agent.agent.planner import OperationPlanner
+        from kkb_agent.api.main import _planner_for
+
+        assert isinstance(_planner_for(self._settings("sk-not-a-real-key")), OperationPlanner)
+
+    @needs_catalog
+    def test_the_runner_the_app_serves_carries_that_planner(self):
+        """The gap was between building a planner and handing it to the runner, so assert
+        the far end rather than the near one."""
+        from kkb_agent.agent.planner import OperationPlanner
+        from kkb_agent.api.main import _default_runner
+
+        runner = _default_runner(self._settings("sk-not-a-real-key", duckdb_path=GOLD))
+        assert isinstance(runner._planner, OperationPlanner)
+
+        offline = _default_runner(self._settings("", duckdb_path=GOLD))
+        assert offline._planner is None
+
+
 def test_runner_passes_request_identity_to_the_frame():
     import asyncio
 
