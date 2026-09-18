@@ -240,7 +240,9 @@ def make_add_series_column_handler(source: SeriesSource):
             measure_type=series.measure_type,
             unit=_unit_for(series),
             origin="source",
-            lineage=_lineage_for(series, target if target != series.native_freq else None),
+            lineage=_lineage_for(
+                series, series.native_freq if target != series.native_freq else None
+            ),
         )
 
         return frame.model_copy(update={"columns": (*frame.columns, column)})

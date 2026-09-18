@@ -1,0 +1,383 @@
+{
+  "snapshot": "published-three-turn-fixed-v1",
+  "spine": [
+    "2021-01-01",
+    "2021-02-01",
+    "2021-03-01",
+    "2021-04-01",
+    "2021-05-01",
+    "2021-06-01",
+    "2021-07-01",
+    "2021-08-01",
+    "2021-09-01",
+    "2021-10-01",
+    "2021-11-01",
+    "2021-12-01",
+    "2022-01-01",
+    "2022-02-01",
+    "2022-03-01",
+    "2022-04-01",
+    "2022-05-01",
+    "2022-06-01",
+    "2022-07-01",
+    "2022-08-01",
+    "2022-09-01",
+    "2022-10-01",
+    "2022-11-01",
+    "2022-12-01",
+    "2023-01-01",
+    "2023-02-01",
+    "2023-03-01",
+    "2023-04-01",
+    "2023-05-01",
+    "2023-06-01",
+    "2023-07-01",
+    "2023-08-01",
+    "2023-09-01",
+    "2023-10-01",
+    "2023-11-01",
+    "2023-12-01",
+    "2024-01-01",
+    "2024-02-01",
+    "2024-03-01",
+    "2024-04-01",
+    "2024-05-01",
+    "2024-06-01",
+    "2024-07-01",
+    "2024-08-01",
+    "2024-09-01",
+    "2024-10-01",
+    "2024-11-01",
+    "2024-12-01",
+    "2025-01-01",
+    "2025-02-01",
+    "2025-03-01",
+    "2025-04-01",
+    "2025-05-01",
+    "2025-06-01",
+    "2025-07-01",
+    "2025-08-01",
+    "2025-09-01",
+    "2025-10-01",
+    "2025-11-01",
+    "2025-12-01"
+  ],
+  "stale_version_rejected": true,
+  "turns": [
+    {
+      "analysis_id": "published-three-turn-regression",
+      "version": 2,
+      "row_count": 60,
+      "spine_matches_shared": true,
+      "columns": [
+        {
+          "key": "konut_kredisi_bakiye",
+          "first": 100.0,
+          "last": 159.0,
+          "missing_count": 0,
+          "source_ids": [
+            "bddk_aylik.t04.taraf10001.t_ketici_kredileri_konut"
+          ],
+          "transformations": []
+        },
+        {
+          "key": "konut_kredisi_faizi",
+          "first": 20.0,
+          "last": 56.0,
+          "missing_count": 0,
+          "source_ids": [
+            "evds.TP.KTF12"
+          ],
+          "transformations": [
+            {
+              "name": "collapse_frequency",
+              "parameters": {
+                "from": "W",
+                "rule": "mean"
+              }
+            }
+          ]
+        }
+      ],
+      "operations": [
+        "add_column",
+        "add_column"
+      ],
+      "findings": [
+        {
+          "finding_id": "f-premise",
+          "frame_version": 2,
+          "producing_tool": "turn1.arithmetic",
+          "supporting_column_keys": [
+            "konut_kredisi_faizi"
+          ],
+          "supersedes": null,
+          "statement": "Sorunun varsaydığının aksine, 2021-01 - 2025-12 genelinde konut kredisi faizi düşmedi, yükseldi: %20.00 -> %56.00 (+36.00 puan)."
+        },
+        {
+          "finding_id": "f-decline",
+          "frame_version": 2,
+          "producing_tool": "turn1.arithmetic",
+          "supporting_column_keys": [
+            "konut_kredisi_faizi",
+            "konut_kredisi_bakiye"
+          ],
+          "supersedes": null,
+          "statement": "Faizin gerilediği 2024-12 - 2025-12 döneminde (67.00% -> 56.00%, -11.00 puan) bakiye nominal olarak %+8 değişti. Bu Turn 1 sonucu nominal bakiyeyi gösterir; enflasyondan arındırma Turn 2 kapsamındadır."
+        },
+        {
+          "finding_id": "f-olcum",
+          "frame_version": 2,
+          "producing_tool": "turn1.scope",
+          "supporting_column_keys": [
+            "konut_kredisi_bakiye"
+          ],
+          "supersedes": null,
+          "statement": "Buradaki 'hacim' kullandırılan yeni kredi tutarı değil, dönem sonu kredi bakiyesidir. Hiçbir kaynak (BDDK Aylık/Haftalık/FinTürk, TCMB EVDS) kullandırılan konut kredisi tutarını yayımlamıyor; bakiye geri ödeme ve yeniden değerleme ile de değişir."
+        }
+      ]
+    },
+    {
+      "analysis_id": "published-three-turn-regression",
+      "version": 4,
+      "row_count": 60,
+      "spine_matches_shared": true,
+      "columns": [
+        {
+          "key": "konut_kredisi_bakiye",
+          "first": 100.0,
+          "last": 159.0,
+          "missing_count": 0,
+          "source_ids": [
+            "bddk_aylik.t04.taraf10001.t_ketici_kredileri_konut"
+          ],
+          "transformations": []
+        },
+        {
+          "key": "konut_kredisi_faizi",
+          "first": 20.0,
+          "last": 56.0,
+          "missing_count": 0,
+          "source_ids": [
+            "evds.TP.KTF12"
+          ],
+          "transformations": [
+            {
+              "name": "collapse_frequency",
+              "parameters": {
+                "from": "W",
+                "rule": "mean"
+              }
+            }
+          ]
+        },
+        {
+          "key": "tufe",
+          "first": 100.0,
+          "last": 159.0,
+          "missing_count": 0,
+          "source_ids": [
+            "evds.TP.GENENDEKS.T1"
+          ],
+          "transformations": []
+        },
+        {
+          "key": "konut_kredisi_bakiye__deflated_by_tufe_2021-01-01",
+          "first": 100.0,
+          "last": 100.0,
+          "missing_count": 0,
+          "source_ids": [
+            "bddk_aylik.t04.taraf10001.t_ketici_kredileri_konut",
+            "evds.TP.GENENDEKS.T1"
+          ],
+          "transformations": [
+            {
+              "name": "deflate_column",
+              "parameters": {
+                "convention_reference": "cpi_base_period_constant_prices_v1",
+                "base_date": "2021-01-01",
+                "deflator_column_key": "tufe",
+                "formula": "nominal_t * CPI_base / CPI_t"
+              }
+            }
+          ]
+        }
+      ],
+      "operations": [
+        "add_column",
+        "add_column",
+        "add_column",
+        "deflate_column"
+      ],
+      "findings": [
+        {
+          "finding_id": "f-premise",
+          "frame_version": 2,
+          "producing_tool": "turn1.arithmetic",
+          "supporting_column_keys": [
+            "konut_kredisi_faizi"
+          ],
+          "supersedes": null,
+          "statement": "Sorunun varsaydığının aksine, 2021-01 - 2025-12 genelinde konut kredisi faizi düşmedi, yükseldi: %20.00 -> %56.00 (+36.00 puan)."
+        },
+        {
+          "finding_id": "f-decline",
+          "frame_version": 2,
+          "producing_tool": "turn1.arithmetic",
+          "supporting_column_keys": [
+            "konut_kredisi_faizi",
+            "konut_kredisi_bakiye"
+          ],
+          "supersedes": null,
+          "statement": "Faizin gerilediği 2024-12 - 2025-12 döneminde (67.00% -> 56.00%, -11.00 puan) bakiye nominal olarak %+8 değişti. Bu Turn 1 sonucu nominal bakiyeyi gösterir; enflasyondan arındırma Turn 2 kapsamındadır."
+        },
+        {
+          "finding_id": "f-olcum",
+          "frame_version": 2,
+          "producing_tool": "turn1.scope",
+          "supporting_column_keys": [
+            "konut_kredisi_bakiye"
+          ],
+          "supersedes": null,
+          "statement": "Buradaki 'hacim' kullandırılan yeni kredi tutarı değil, dönem sonu kredi bakiyesidir. Hiçbir kaynak (BDDK Aylık/Haftalık/FinTürk, TCMB EVDS) kullandırılan konut kredisi tutarını yayımlamıyor; bakiye geri ödeme ve yeniden değerleme ile de değişir."
+        }
+      ]
+    },
+    {
+      "analysis_id": "published-three-turn-regression",
+      "version": 5,
+      "row_count": 60,
+      "spine_matches_shared": true,
+      "columns": [
+        {
+          "key": "konut_kredisi_bakiye",
+          "first": 100.0,
+          "last": 159.0,
+          "missing_count": 0,
+          "source_ids": [
+            "bddk_aylik.t04.taraf10001.t_ketici_kredileri_konut"
+          ],
+          "transformations": []
+        },
+        {
+          "key": "konut_kredisi_faizi",
+          "first": 20.0,
+          "last": 56.0,
+          "missing_count": 0,
+          "source_ids": [
+            "evds.TP.KTF12"
+          ],
+          "transformations": [
+            {
+              "name": "collapse_frequency",
+              "parameters": {
+                "from": "W",
+                "rule": "mean"
+              }
+            }
+          ]
+        },
+        {
+          "key": "tufe",
+          "first": 100.0,
+          "last": 159.0,
+          "missing_count": 0,
+          "source_ids": [
+            "evds.TP.GENENDEKS.T1"
+          ],
+          "transformations": []
+        },
+        {
+          "key": "konut_kredisi_bakiye__deflated_by_tufe_2021-01-01",
+          "first": 100.0,
+          "last": 100.0,
+          "missing_count": 0,
+          "source_ids": [
+            "bddk_aylik.t04.taraf10001.t_ketici_kredileri_konut",
+            "evds.TP.GENENDEKS.T1"
+          ],
+          "transformations": [
+            {
+              "name": "deflate_column",
+              "parameters": {
+                "convention_reference": "cpi_base_period_constant_prices_v1",
+                "base_date": "2021-01-01",
+                "deflator_column_key": "tufe",
+                "formula": "nominal_t * CPI_base / CPI_t"
+              }
+            }
+          ]
+        },
+        {
+          "key": "konut_fiyat_endeksi",
+          "first": 80.0,
+          "last": 139.0,
+          "missing_count": 0,
+          "source_ids": [
+            "evds.TP.KFE.TR"
+          ],
+          "transformations": []
+        }
+      ],
+      "operations": [
+        "add_column",
+        "add_column",
+        "add_column",
+        "deflate_column",
+        "add_column"
+      ],
+      "findings": [
+        {
+          "finding_id": "f-premise",
+          "frame_version": 2,
+          "producing_tool": "turn1.arithmetic",
+          "supporting_column_keys": [
+            "konut_kredisi_faizi"
+          ],
+          "supersedes": null,
+          "statement": "Sorunun varsaydığının aksine, 2021-01 - 2025-12 genelinde konut kredisi faizi düşmedi, yükseldi: %20.00 -> %56.00 (+36.00 puan)."
+        },
+        {
+          "finding_id": "f-decline",
+          "frame_version": 2,
+          "producing_tool": "turn1.arithmetic",
+          "supporting_column_keys": [
+            "konut_kredisi_faizi",
+            "konut_kredisi_bakiye"
+          ],
+          "supersedes": null,
+          "statement": "Faizin gerilediği 2024-12 - 2025-12 döneminde (67.00% -> 56.00%, -11.00 puan) bakiye nominal olarak %+8 değişti. Bu Turn 1 sonucu nominal bakiyeyi gösterir; enflasyondan arındırma Turn 2 kapsamındadır."
+        },
+        {
+          "finding_id": "f-olcum",
+          "frame_version": 2,
+          "producing_tool": "turn1.scope",
+          "supporting_column_keys": [
+            "konut_kredisi_bakiye"
+          ],
+          "supersedes": null,
+          "statement": "Buradaki 'hacim' kullandırılan yeni kredi tutarı değil, dönem sonu kredi bakiyesidir. Hiçbir kaynak (BDDK Aylık/Haftalık/FinTürk, TCMB EVDS) kullandırılan konut kredisi tutarını yayımlamıyor; bakiye geri ödeme ve yeniden değerleme ile de değişir."
+        },
+        {
+          "finding_id": "f-decline-hpi",
+          "frame_version": 5,
+          "producing_tool": "turn3.arithmetic",
+          "supporting_column_keys": [
+            "konut_kredisi_bakiye",
+            "konut_kredisi_bakiye__deflated_by_tufe_2021-01-01",
+            "konut_fiyat_endeksi"
+          ],
+          "supersedes": "f-decline",
+          "statement": "2021-01 - 2025-12 ortak döneminde Konut Fiyat Endeksi 80.00 seviyesinden 139.00 seviyesine (%+73.8) değişirken reel konut kredisi bakiyesi %+0.0 değişti. Fiyat ve kredi hareketleri birlikte görülmektedir; bu karşılaştırma tek başına nedensellik kanıtlamaz."
+        }
+      ]
+    }
+  ],
+  "analytics": {
+    "nominal_change_pct": 59.0,
+    "cpi_change_pct": 59.0,
+    "real_change_pct": 0.0,
+    "hpi_change_pct": 73.75,
+    "deflation_base_period": "2021-01-01"
+  }
+}

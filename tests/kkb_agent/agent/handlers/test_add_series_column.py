@@ -120,6 +120,10 @@ class TestTheSpineIsFixed:
         column = run(FakeSource(s)).columns[0]
         assert column.values[0] == pytest.approx(11.5)
         assert [t.name for t in column.lineage.transformations] == ["collapse_frequency"]
+        assert {item.key: item.value for item in column.lineage.transformations[0].parameters} == {
+            "from": "W",
+            "rule": "mean",
+        }
 
     def test_a_coarser_series_is_refused_rather_than_expanded(self):
         """Quarterly onto a monthly spine would invent two observations per quarter."""
