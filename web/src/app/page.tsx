@@ -1,50 +1,35 @@
-import { AnalysisChart } from "@/components/analysis-chart";
-import { AnalysisTable } from "@/components/analysis-table";
 import { AskPanel } from "@/components/ask-panel";
 import { HealthPanel } from "@/components/health-panel";
-import { loadSuccessfulReplayFrame } from "@/lib/replay-fixture";
 
 export default function Home() {
-  const frame = loadSuccessfulReplayFrame();
-  const chartFrame = { spine: frame.spine, columns: frame.columns };
-
   return (
-    <main className="min-h-screen bg-slate-950 px-6 py-20 text-slate-100">
-      <div className="mx-auto min-w-0 max-w-6xl">
-        <p className="text-sm text-teal-400">Yerel geliştirme</p>
-        <h1 className="mt-3 text-3xl font-semibold">KKB Lakehouse Agent</h1>
-        <p className="mt-4 text-slate-400">Uygulama ve yerel veri depolarının bağlantı durumu.</p>
-        <div className="max-w-xl">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-5">
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-teal-400">
+              KKB Hackathon 2026
+            </p>
+            <h1 className="mt-1 text-xl font-semibold">Lakehouse Agent</h1>
+          </div>
           <HealthPanel />
         </div>
-        <section className="mt-16 min-w-0">
+      </header>
+
+      <main className="mx-auto min-w-0 max-w-5xl px-6 py-10">
+        <p className="max-w-2xl text-slate-400">
+          BDDK ve TCMB EVDS verileri üzerinde Türkçe soru sorun. Sistem soruyu ilgili araca
+          yönlendirir, analizi hesaplar ve her sayının hangi seriden geldiğini gösterir.
+        </p>
+        <div className="mt-10">
           <AskPanel />
-        </section>
-        <section className="mt-16 min-w-0" aria-labelledby="analysis-table-title">
-          <div className="mb-4">
-            <p className="text-sm text-teal-400">SCRUM-68 replay fixture</p>
-            <h2 className="mt-1 text-xl font-semibold" id="analysis-table-title">
-              Analiz tablosu
-            </h2>
-          </div>
-          <AnalysisTable frame={frame} />
-        </section>
-        {frame.charts.length > 0 ? (
-          <section className="mt-12 min-w-0" aria-labelledby="analysis-chart-title">
-            <div className="mb-4">
-              <p className="text-sm text-teal-400">Server ChartSpec</p>
-              <h2 className="mt-1 text-xl font-semibold" id="analysis-chart-title">
-                Analiz grafiği
-              </h2>
-            </div>
-            <div className="space-y-6">
-              {frame.charts.map((chart) => (
-                <AnalysisChart chart={chart} frame={chartFrame} key={chart.chart_id} />
-              ))}
-            </div>
-          </section>
-        ) : null}
-      </div>
-    </main>
+        </div>
+      </main>
+
+      <footer className="mx-auto max-w-5xl px-6 pb-12 text-xs text-slate-600">
+        Veriler 2021-01 – 2026-06 aralığında sabit bir anlık görüntüden okunur; hiçbir sayı
+        model tarafından üretilmez.
+      </footer>
+    </div>
   );
 }

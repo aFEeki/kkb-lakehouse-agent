@@ -2,24 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AnalysisChart } from "@/components/analysis-chart";
 import { AnalysisTable } from "@/components/analysis-table";
-import {
-  STAGE_LABELS,
-  STAGE_ORDER,
-  TOOL_LABELS,
-  type AskEvent,
-  type ResultFrame,
-  type StageName,
-  askStream,
-} from "@/lib/ask";
-
-type StageState = {
-  stage: StageName;
-  status: "running" | "succeeded" | "failed";
-  tools: string[];
-  startedAt: number;
-  endedAt?: number;
-};
+import { Answer } from "@/components/answer";
+import { StagePipeline, type StageState } from "@/components/stage-pipeline";
+import { STAGE_LABELS, type AskEvent, type ResultFrame, askStream } from "@/lib/ask";
 
 type Turn = {
   id: string;
@@ -31,6 +18,26 @@ type Turn = {
   outcome?: "succeeded" | "failed";
   startedAt: number;
 };
+
+// The three published questions, in the order they have to be asked: turns 2 and 3 modify
+// the table turn 1 builds, so asking one first is refused. Offering them as an ordered
+// sequence is the difference between a demo that walks the reviewer through the analysis
+// and one that makes them guess the wording.
+const SUGGESTIONS = [
+  {
+    label: "Tabloyu kur",
+    question: "2021-2025 arasında konut kredileri ve faiz oranlarını aylık göster.",
+  },
+  {
+    label: "Enflasyondan arındır",
+    question: "Konut kredisi tutarlarını enflasyondan arındırır mısın?",
+  },
+  {
+    label: "Sütun ekle",
+    question:
+      "Bu tabloyu hiç bozmadan, konut fiyat endeksini yeni sütun olarak ekle. Kredilerin artmamasının nedeni fiyat artışları olabilir mi?",
+  },
+];
 
 function elapsed(from: number, to: number): string {
   return `${((to - from) / 1000).toFixed(1)} sn`;
@@ -47,50 +54,6 @@ function useClock(active: boolean): number {
   return now;
 }
 
-function StageList({ turn, now }: { turn: Turn; now: number }) {
-  const seen = new Map(turn.stages.map((stage) => [stage.stage, stage]));
-
-  return (
-    <ol className="mt-4 space-y-2">
-      {STAGE_ORDER.map((name) => {
-        const stage = seen.get(name);
-        const status = stage?.status ?? "pending";
-        return (
-          <li className="flex items-start gap-3 text-sm" key={name}>
-            <span
-              aria-hidden="true"
-              className={
-                status === "running"
-                  ? "mt-1.5 h-2 w-2 shrink-0 animate-pulse rounded-full bg-teal-400"
-                  : status === "succeeded"
-                    ? "mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal-400"
-                    : status === "failed"
-                      ? "mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-400"
-                      : "mt-1.5 h-2 w-2 shrink-0 rounded-full border border-slate-600"
-              }
-            />
-            <span className={status === "pending" ? "text-slate-600" : "text-slate-200"}>
-              {STAGE_LABELS[name]}
-              {stage?.tools.length ? (
-                <span className="ml-2 text-slate-400">
-                  · {stage.tools.map((tool) => TOOL_LABELS[tool as never] ?? tool).join(", ")}
-                </span>
-              ) : null}
-            </span>
-            {stage ? (
-              <span className="ml-auto shrink-0 tabular-nums text-slate-500">
-                {status === "running"
-                  ? elapsed(stage.startedAt, now)
-                  : elapsed(stage.startedAt, stage.endedAt ?? now)}
-              </span>
-            ) : null}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
 export function AskPanel() {
   const [question, setQuestion] = useState(
     "2021-2025 arasında konut kredileri ve faiz oranlarını aylık göster.",
@@ -98,9 +61,24 @@ export function AskPanel() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [running, setRunning] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
+  const latestTurnRef = useRef<HTMLElement | null>(null);
   const now = useClock(running);
 
+  // A step counts as taken once it produced a table, not once it was typed: a turn that
+  // failed leaves the sequence where it was, which is also where the backend left it.
+  const taken = SUGGESTIONS.map((item) =>
+    turns.some((turn) => turn.question === item.question && Boolean(turn.frame)),
+  );
+  const nextStep = taken.indexOf(false);
+
   useEffect(() => () => controllerRef.current?.abort(), []);
+
+  // Bring the new turn into view. The question box sits above the conversation, so a
+  // turn appended below it lands off-screen and the system looks like it did nothing.
+  useEffect(() => {
+    if (turns.length === 0) return;
+    latestTurnRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [turns.length]);
 
   const applyEvent = useCallback((turnId: string, event: AskEvent) => {
     setTurns((current) =>
@@ -232,7 +210,7 @@ export function AskPanel() {
           Sorunuz
         </label>
         <textarea
-          className="w-full rounded-xl border border-slate-700 bg-slate-900 p-4 text-slate-100 placeholder:text-slate-500"
+          className="w-full rounded-xl border border-slate-700 bg-slate-900 p-4 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/20 disabled:opacity-60"
           disabled={running}
           id="question"
           onChange={(event) => setQuestion(event.target.value)}
@@ -240,9 +218,9 @@ export function AskPanel() {
           rows={3}
           value={question}
         />
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
-            className="rounded-lg bg-teal-400 px-4 py-2 font-medium text-slate-950 disabled:opacity-50"
+            className="rounded-lg bg-teal-400 px-4 py-2 font-medium text-slate-950 transition hover:bg-teal-300 disabled:opacity-50 disabled:hover:bg-teal-400"
             disabled={running || !question.trim()}
             type="submit"
           >
@@ -250,7 +228,7 @@ export function AskPanel() {
           </button>
           {running ? (
             <button
-              className="rounded-lg border border-slate-700 px-4 py-2 text-slate-300"
+              className="rounded-lg border border-slate-700 px-4 py-2 text-slate-300 transition hover:border-slate-600"
               onClick={() => controllerRef.current?.abort()}
               type="button"
             >
@@ -260,14 +238,51 @@ export function AskPanel() {
         </div>
       </form>
 
+      <div className="mt-6">
+        <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+          Örnek akış — sırayla
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {SUGGESTIONS.map((item, index) => {
+            const isNext = index === nextStep;
+            return (
+              <button
+                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition disabled:opacity-50 ${
+                  isNext
+                    ? "border-teal-400/60 bg-teal-400/10 text-teal-200 hover:bg-teal-400/20"
+                    : taken[index]
+                      ? "border-slate-800 bg-slate-900/40 text-slate-500"
+                      : "border-slate-800 bg-slate-900/40 text-slate-400 hover:border-slate-700"
+                }`}
+                disabled={running}
+                key={item.label}
+                onClick={() => setQuestion(item.question)}
+                title={item.question}
+                type="button"
+              >
+                <span className="tabular-nums text-xs text-slate-600">
+                  {taken[index] ? "✓" : index + 1}
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div aria-live="polite" className="mt-10 space-y-10">
-        {turns.map((turn) => {
+        {turns.map((turn, index) => {
           const active = running && !turn.outcome;
+          const isLatest = index === turns.length - 1;
           return (
-            <article className="rounded-xl border border-slate-700 p-6" key={turn.id}>
+            <article
+              className="scroll-mt-6 rounded-xl border border-slate-800 bg-slate-900/40 p-6 shadow-lg shadow-black/20"
+              key={turn.id}
+              ref={isLatest ? latestTurnRef : null}
+            >
               <p className="font-medium text-slate-100">{turn.question}</p>
 
-              <StageList now={now} turn={turn} />
+              <StagePipeline now={now} stages={turn.stages} />
 
               {active ? (
                 <p className="mt-4 text-sm text-slate-400">
@@ -306,15 +321,25 @@ export function AskPanel() {
                 )
               ) : null}
 
-              {turn.answer ? (
-                <p className="mt-5 whitespace-pre-wrap leading-relaxed text-slate-200">
-                  {turn.answer}
-                </p>
-              ) : null}
+              {turn.answer ? <Answer answer={turn.answer} /> : null}
 
               {turn.frame && turn.frame.columns.length > 0 ? (
                 <div className="mt-6 min-w-0">
                   <AnalysisTable frame={turn.frame} />
+                </div>
+              ) : null}
+
+              {turn.frame?.charts.length ? (
+                // The chart comes from the frame's own ChartSpec, so it plots the table
+                // above it rather than a second, separately derived view of the data.
+                <div className="mt-6 min-w-0 space-y-6">
+                  {turn.frame.charts.map((chart) => (
+                    <AnalysisChart
+                      chart={chart}
+                      frame={{ spine: turn.frame!.spine, columns: turn.frame!.columns }}
+                      key={chart.chart_id}
+                    />
+                  ))}
                 </div>
               ) : null}
             </article>
