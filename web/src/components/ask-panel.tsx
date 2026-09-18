@@ -164,11 +164,15 @@ export function AskPanel() {
     if (!asked || running) return;
 
     const turnId = `turn-${turns.length + 1}-${Date.now()}`;
-    const previous = turns[turns.length - 1];
+    // Continue from the most recent turn that actually produced a table, not simply the
+    // previous one: a question that failed in between must not throw away the analysis
+    // the turns before it built.
+    const previous = [...turns].reverse().find((turn) => turn.frame);
     setTurns((current) => [
       ...current,
       { id: turnId, question: asked, stages: [], startedAt: Date.now() },
     ]);
+    setQuestion("");
     setRunning(true);
 
     const controller = new AbortController();
