@@ -11,7 +11,7 @@ import json
 import re
 from dataclasses import dataclass
 
-# The brief's six names. web_search is selectable and refuses until SCRUM-67 builds it.
+# The brief's six names.
 TOOLS = (
     "lakehouse",
     "anomaly",
@@ -21,7 +21,7 @@ TOOLS = (
     "web_search",
 )
 
-UNIMPLEMENTED = {"web_search"}
+UNIMPLEMENTED: frozenset[str] = frozenset()
 
 _URL = re.compile(r"https?://\S+", re.IGNORECASE)
 
@@ -66,6 +66,13 @@ _CUES: dict[str, tuple[str, ...]] = {
         "granger",
         "neden sonuç",
         "neden-sonuç",
+    ),
+    "web_search": (
+        "internette ara",
+        "internetten bul",
+        "web'de ara",
+        "webde ara",
+        "güncel haber",
     ),
 }
 
@@ -274,7 +281,14 @@ def _penalties(values) -> tuple[float, float]:
     ) * size
 
 
-def run_tool(question: str, catalog, *, mia_client=None, fetcher=None) -> ToolRun:
+def run_tool(
+    question: str,
+    catalog,
+    *,
+    mia_client=None,
+    fetcher=None,
+    web_search_tool=None,
+) -> ToolRun:
     """Choose a tool, give it what it needs, run it."""
     choice = select_tool(question, mia_client=mia_client)
 
@@ -285,6 +299,9 @@ def run_tool(question: str, catalog, *, mia_client=None, fetcher=None) -> ToolRu
             choice,
             refusal=f"{choice.tool} aracı henüz geliştirilmedi; bu soru yanıtlanamıyor.",
         )
+
+    if choice.tool == "web_search":
+        return _run_web_search(question, choice, web_search_tool)
 
     if choice.tool == "url_agent":
         return _run_url_agent(question, choice, fetcher)
@@ -369,3 +386,24 @@ def _run_url_agent(question: str, choice: ToolChoice, fetcher) -> ToolRun:
     finally:
         if owned:
             client.close()
+
+
+def _run_web_search(question: str, choice: ToolChoice, tool) -> ToolRun:
+    from kkb_agent.config import Settings
+    from kkb_agent.tools.web_search import (
+        SearxNGSearchProvider,
+        WebSearchError,
+        WebSearchTool,
+    )
+
+    owned_provider = None
+    try:
+        if tool is None:
+            owned_provider = SearxNGSearchProvider(Settings().searxng_url)
+            tool = WebSearchTool(owned_provider)
+        return ToolRun(choice, result=tool.search(question, language="tr"))
+    except WebSearchError:
+        return ToolRun(choice, refusal="Web araması şu anda kullanılamıyor.")
+    finally:
+        if owned_provider is not None:
+            owned_provider.close()

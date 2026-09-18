@@ -511,3 +511,38 @@ class TestNonPublishedQuestionsReachTheRouter:
     def test_the_published_turn_is_untouched(self):
         events = self._events(QUESTION)
         assert events[-2].type == "result"
+
+    def test_web_search_evidence_is_cited_after_a_verification_stage(self):
+        from kkb_agent.agent.router import ToolChoice, ToolRun
+        from kkb_agent.tools.web_search import WebSearchEvidence, WebSearchItem, WebSearchResult
+
+        result = WebSearchResult(
+            query="güncel haber",
+            items=(WebSearchItem("TCMB duyurusu", "https://www.tcmb.gov.tr/duyuru", "özet"),),
+            evidence=(WebSearchEvidence("TCMB duyurusu", "https://www.tcmb.gov.tr/duyuru"),),
+        )
+        run = ToolRun(ToolChoice("web_search", "test", "rules"), result=result)
+        with patch("kkb_agent.api.turn1_runner.run_tool", return_value=run):
+            events = self._events("Güncel haberi internette ara")
+
+        started = [event.payload.stage for event in events if event.type == "stage_start"]
+        assert started == ["agentic_analytics", "verification"]
+        assert events[-2].payload.code == "TOOL_RUN_NOT_RENDERABLE"
+        assert "TCMB duyurusu" in events[-2].payload.user_message
+        assert "https://www.tcmb.gov.tr/duyuru" in events[-2].payload.user_message
+        assert events[-1].type == "completion"
+
+    def test_web_search_failure_is_a_safe_refusal(self):
+        from kkb_agent.agent.router import ToolChoice, ToolRun
+
+        run = ToolRun(
+            ToolChoice("web_search", "test", "rules"),
+            refusal="Web araması şu anda kullanılamıyor.",
+        )
+        with patch("kkb_agent.api.turn1_runner.run_tool", return_value=run):
+            events = self._events("Güncel haberi internette ara")
+
+        assert events[-2].payload.code == "TOOL_REFUSED"
+        assert events[-2].payload.user_message == "Web araması şu anda kullanılamıyor."
+        assert "Traceback" not in events[-2].payload.user_message
+        assert events[-1].payload.outcome == "failed"
