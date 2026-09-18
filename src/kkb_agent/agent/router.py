@@ -1,25 +1,8 @@
-"""Route a natural-language question to one of the brief's tools.
+"""Route a natural-language question to one of the brief's tools (deck p.10).
 
-The brief requires it in as many words: "Doğal dilde gelen soruyu ilgili tool'lara
-yönlendirip yanıtı verebilmelidir." Until now nothing did. Five tools were built and
-tested - causality carries 1,707 lines of tests, the URL agent passes six live checks
-against Borsa İstanbul - and none of them could be reached by asking a question. The turns
-pass `tool="lakehouse"` as a stage label; no tool module was ever invoked.
-
-The split is the same one the planner and executor already use, because it is the reason
-any of this can be trusted:
-
-    the model decides WHICH tool      -> schema-constrained to the names that exist
-    the code decides IF that is legal -> an unknown name is unrepresentable, not rejected
-    the code supplies the data        -> tools receive values and dates, never a question
-
-A deterministic keyword fallback runs when MIA is unreachable, so the demo survives the
-model being down - and `chosen_by` says which path ran, because "the agent chose this" and
-"a keyword matched" must never look the same.
-
-What this deliberately does not do is guess. A question matching no tool is refused, as it
-was before. A router that silently picks the wrong tool is worse than an honest refusal:
-the answer still arrives, still looks computed, and is about something else.
+Model picks the tool under a schema that makes an invented name unrepresentable; Turkish
+keyword rules take over when MIA is down, and `chosen_by` says which ran. A question
+matching no tool is refused rather than sent to the nearest one.
 """
 
 from __future__ import annotations
@@ -28,9 +11,7 @@ import json
 import re
 from dataclasses import dataclass
 
-# The brief's six tools, by its own names. `web_search` is listed because the brief lists
-# it; selecting it yields an honest refusal until SCRUM-67 builds it, which is better than
-# pretending the question was unroutable.
+# The brief's six names. web_search is selectable and refuses until SCRUM-67 builds it.
 TOOLS = (
     "lakehouse",
     "anomaly",
@@ -44,9 +25,7 @@ UNIMPLEMENTED = {"web_search"}
 
 _URL = re.compile(r"https?://\S+", re.IGNORECASE)
 
-# Turkish cues per tool, checked against a casefolded question. Deliberately narrow: a cue
-# that fires on an ordinary data question would route it away from the lakehouse and hand a
-# reviewer a confidently wrong answer.
+# Narrow on purpose: a loose cue mis-routes, and the wrong answer still looks computed.
 _CUES: dict[str, tuple[str, ...]] = {
     "lakehouse": (
         "göster",
@@ -105,12 +84,8 @@ class ToolChoice:
 
 
 def tool_choice_schema() -> dict:
-    """One enum over the tool names, so an invented tool cannot be returned.
-
-    `tool` is nullable on purpose. Forcing a choice would make "none of these" the one
-    answer the model cannot give, and the model would pick the closest name instead - which
-    is precisely the silent mis-route this router exists to avoid.
-    """
+    """Enum over the tool names. Nullable: forcing a choice makes "none of these"
+    unsayable, so the model returns the closest name instead."""
     return {
         "type": "object",
         "properties": {
@@ -137,11 +112,8 @@ _SYSTEM = (
 
 
 def rule_choice(question: str) -> ToolChoice:
-    """The deterministic fallback, and the reference for what each tool is for.
-
-    Order matters. A URL in the question settles it before any keyword is consulted: the
-    content has to be read before anything can be said about it.
-    """
+    """Deterministic fallback. A URL settles it first: the content has to be read
+    before anything can be said about it."""
     text = question.casefold()
 
     if _URL.search(question):
@@ -156,13 +128,7 @@ def rule_choice(question: str) -> ToolChoice:
 
 
 def select_tool(question: str, *, planner=None, mia_client=None) -> ToolChoice:
-    """Ask the model which tool to run; fall back to the keyword rules.
-
-    `mia_client` rather than a planner object because choosing a tool is a different call
-    from planning operations - the planner's schema is about frame operations and has no
-    room for this. Passing neither gives the rule path, which is what tests and an
-    unconfigured deployment get.
-    """
+    """Ask the model which tool to run; fall back to the keyword rules."""
     if not question.strip():
         raise ValueError("question must not be empty")
 
@@ -190,31 +156,21 @@ def select_tool(question: str, *, planner=None, mia_client=None) -> ToolChoice:
         )
         payload = json.loads(response.choices[0].message.content or "{}")
     except Exception:
-        # The model being unreachable is not a reason to answer nothing. The rules are
-        # weaker, and saying which one ran is how that stays visible.
-        return rule_choice(question)
+        return rule_choice(question)  # weaker; chosen_by keeps that visible
 
     tool = payload.get("tool")
     if tool is not None and tool not in TOOLS:
-        # Unreachable under a strict enum, and cheap to refuse to trust anyway.
         return rule_choice(question)
     reason = str(payload.get("reason") or "").strip() or "model seçimi"
     return ToolChoice(tool, reason, "planner")
 
 
-# --------------------------------------------------------------------------------------
-# Dispatch: resolve what the chosen tool needs, and call it.
-#
-# The tools take values and dates, never a question - "data acquisition is the Lakehouse /
-# agent layer's responsibility", as the causality tool puts it. This is that layer.
-# --------------------------------------------------------------------------------------
+# Dispatch. Tools take values and dates, never a question; this supplies them.
 
-# Observations per seasonal cycle, by the catalog's own frequency codes. Anomaly detection
-# needs this to decompose; getting it wrong reports seasonality as an outlier.
+# Observations per seasonal cycle. Wrong here reports seasonality as an outlier.
 _PERIOD: dict[str, int] = {"D": 7, "W": 52, "M": 12, "Q": 4}
 
-# Minimum observations a regime must hold to count as one, by frequency. Shorter than this
-# and every wobble is a regime change.
+# Shortest run that counts as a regime; below this every wobble is a break.
 _MIN_SEGMENT: dict[str, int] = {"D": 14, "W": 8, "M": 6, "Q": 3}
 
 _CATALOG_COLUMNS = (
@@ -226,12 +182,8 @@ _CATALOG_COLUMNS = (
 
 @dataclass(frozen=True)
 class ToolRun:
-    """What the router did, and what came back.
-
-    `refusal` is Turkish and user-facing. A run that refuses is a complete answer, not an
-    error: a question naming no series we hold, or asking for a tool we have not built,
-    deserves to be told so rather than handed the nearest available number.
-    """
+    """What the router did. `refusal` is Turkish and user-facing: a refusal is a
+    complete answer, not an error."""
 
     choice: ToolChoice
     series_ids: tuple[str, ...] = ()
@@ -280,8 +232,7 @@ def _resolve(catalog, question: str, wanted: int):
     )
     if not resolution.resolved:
         return ()
-    # Distinct series, in rank order. Causality needs two different ones; asking whether a
-    # series causes itself is not a question.
+    # Distinct, in rank order: a series does not cause itself.
     seen: list[str] = []
     for series_id in resolution.series_ids:
         if series_id not in seen:
@@ -294,13 +245,8 @@ _PAIR = re.compile(r"\s+(?:ile|ve|arasında|arasindaki|karşı)\s+", re.IGNORECA
 
 
 def _resolve_pair(catalog, question: str) -> tuple[str, ...]:
-    """Two distinct series for a causality question.
-
-    Resolving the whole sentence at once finds one concept, because that is what retrieval
-    is for. A causality question names two, so the sentence is split where Turkish joins
-    them and each side is resolved on its own. If the split yields nothing usable the whole
-    sentence is still tried, so a differently-phrased question degrades rather than fails.
-    """
+    """Two distinct series. Retrieval resolves one concept per sentence, so the
+    question is split where Turkish joins two things and each side resolved separately."""
     parts = [part.strip(" ?.,") for part in _PAIR.split(question) if part.strip(" ?.,")]
     found: list[str] = []
     for part in parts:
@@ -313,13 +259,8 @@ def _resolve_pair(catalog, question: str) -> tuple[str, ...]:
 
 
 def _penalties(values) -> tuple[float, float]:
-    """Scale the PELT penalties to the series.
-
-    The signal is not normalised before segmentation, so a fixed penalty means something
-    different for a lira balance in the billions than for a percentage. Turkish series over
-    2021-2026 span both. Scaling by variance and log(n) keeps "how much evidence counts as
-    a regime change" comparable across them.
-    """
+    """Scale PELT penalties to the series: the signal is not normalised, so a fixed
+    penalty means different things for a lira balance and a percentage."""
     import math
     import statistics
 
@@ -334,12 +275,7 @@ def _penalties(values) -> tuple[float, float]:
 
 
 def run_tool(question: str, catalog, *, mia_client=None, fetcher=None) -> ToolRun:
-    """Choose a tool for the question, give it what it needs, and run it.
-
-    Every refusal path here is deliberate. The alternative to refusing is answering with
-    the wrong series or the wrong tool, which produces a number that looks computed and is
-    about something else - the one failure this project cannot afford.
-    """
+    """Choose a tool, give it what it needs, run it."""
     choice = select_tool(question, mia_client=mia_client)
 
     if choice.tool is None:
@@ -401,8 +337,7 @@ def _call(tool: str, loaded):
 
     if tool == "causality":
         other_values, other_dates, _ = loaded[1]
-        # Both series on the shared dates they actually have in common. A causality test
-        # over misaligned axes compares one series against another series' calendar.
+        # Shared dates only: misaligned axes compare a series against another's calendar.
         shared = sorted(set(dates) & set(other_dates))
         if len(shared) < 12:
             raise ValueError("iki seri yalnızca çok az ortak dönemde kesişiyor")
@@ -411,9 +346,7 @@ def _call(tool: str, loaded):
         return analyze_causality([first[d] for d in shared], [second[d] for d in shared], shared)
 
     if tool == "lakehouse":
-        # The series resolution *is* the lakehouse answer for a discovery question: which
-        # series, from where, in what unit.
-        return meta
+        return meta  # which series, from where, in what unit
 
     raise ValueError(f"no dispatch for {tool!r}")
 
