@@ -16,11 +16,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import unicodedata
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 
-from kkb_agent.agent.router import run_tool
+from kkb_agent.agent.router import run_tool, select_tool
 from kkb_agent.agent.turn1 import TurnResult, build_turn1
 from kkb_agent.agent.turn2 import TurnTwoResult, build_turn2
 from kkb_agent.agent.turn3 import HPI_KEY, TurnThreeResult, build_turn3
@@ -41,6 +42,7 @@ from kkb_agent.api.contracts import (
     ToolSelectedPayload,
 )
 from kkb_agent.api.frame_store import AnalysisFrameStore, AnalysisFrameStoreError
+from kkb_agent.catalog.identity import turkish_casefold
 from kkb_agent.catalog.series_source import CatalogSeriesSource
 
 logger = logging.getLogger(__name__)
@@ -49,18 +51,34 @@ _FAILED = "Analiz tamamlanamadı. Lütfen tekrar deneyin."
 _SENTINEL = object()
 
 
+def _fold(text: str) -> str:
+    """Casefold and strip Turkish diacritics, so a question still matches when it is
+    typed without them.
+
+    People write "arindirir" as often as "arındırır", and the organizers' own slide
+    writes "sutun" without the u-umlaut. Matching on the accented spelling alone rejects
+    the published question as typed by the people who published it.
+    """
+    lowered = turkish_casefold(text).replace("ı", "i").replace("İ", "i")
+    decomposed = unicodedata.normalize("NFKD", lowered)
+    stripped = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", stripped.strip())
+
+
 def classify_published_turn(question: str) -> int | None:
     """Recognize only the three bounded Turkish demo intents."""
-    normalized = re.sub(r"\s+", " ", question.strip().casefold())
-    if any(
-        term in normalized for term in ("konut fiyat endeksi", "fiyat endeksini", "kfe")
-    ) and any(term in normalized for term in ("ekle", "sütun", "nedeni", "olabilir")):
-        return 3
-    if "kredi" in normalized and any(
-        term in normalized for term in ("enflasyondan arındır", "reel", "sabit fiyat", "deflat")
+    normalized = _fold(question)
+
+    def has(*terms: str) -> bool:
+        return any(_fold(term) in normalized for term in terms)
+
+    if has("konut fiyat endeksi", "fiyat endeksini", "kfe") and has(
+        "ekle", "sütun", "nedeni", "olabilir"
     ):
+        return 3
+    if has("kredi") and has("enflasyondan arındır", "reel", "sabit fiyat", "deflat"):
         return 2
-    if "konut" in normalized and "kredi" in normalized and "faiz" in normalized:
+    if has("konut") and has("kredi") and has("faiz"):
         return 1
     return None
 
@@ -201,22 +219,38 @@ class TurnOneAskRunner:
     async def _route(self, request: AskRequest, sequence: int):
         """Hand a non-published question to the tool router and stream what it did."""
         client = getattr(self._planner, "_mia_client", None)
-        run = await asyncio.to_thread(run_tool, request.question, self._catalog, mia_client=client)
+        choice = await asyncio.to_thread(select_tool, request.question, mia_client=client)
 
         # Only open a stage when a tool was actually selected: a stage that starts and
         # immediately fails reads as a broken product, where a bare refusal reads as an
         # answer.
-        if run.choice.tool is not None:
-            yield _stage_start(request, sequence, "agentic_analytics")
-            sequence += 1
-            yield _tool_selected(
-                request, sequence, _EVENT_NAME.get(run.choice.tool, run.choice.tool)
+        if choice.tool is None:
+            yield _error(
+                request,
+                sequence,
+                code="TOOL_REFUSED",
+                message="Bu soru mevcut araçlardan hiçbirine yönlendirilemedi.",
+                retryable=False,
             )
-            sequence += 1
-            yield _stage_end(
-                request, sequence, "agentic_analytics", "succeeded" if run.ran else "failed"
-            )
-            sequence += 1
+            yield _completion(request, sequence + 1, "failed", request.version)
+            return
+
+        # Announce the tool before running it, not after. The run reads a catalog series
+        # and can take seconds; a stage that only appears once it is already over leaves
+        # the screen empty for exactly as long as the work takes.
+        yield _stage_start(request, sequence, "agentic_analytics")
+        sequence += 1
+        yield _tool_selected(request, sequence, _EVENT_NAME.get(choice.tool, choice.tool))
+        sequence += 1
+
+        run = await asyncio.to_thread(
+            run_tool, request.question, self._catalog, mia_client=client, choice=choice
+        )
+
+        yield _stage_end(
+            request, sequence, "agentic_analytics", "succeeded" if run.ran else "failed"
+        )
+        sequence += 1
 
         # Tool results have no AnalysisFrame yet, and ResultPayload requires one - so the
         # outcome is reported on the error channel rather than faked into a frame.

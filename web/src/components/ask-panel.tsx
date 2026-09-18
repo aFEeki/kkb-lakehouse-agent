@@ -275,16 +275,31 @@ export function AskPanel() {
               ) : null}
 
               {turn.error ? (
-                <p
-                  className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200"
-                  role="alert"
-                >
-                  {turn.error.message}
-                  <span className="mt-1 block text-xs text-amber-300/70">
-                    {turn.error.code}
-                    {turn.error.retryable ? " · tekrar denenebilir" : " · tekrar denemeyin"}
-                  </span>
-                </p>
+                // A tool that ran and produced a finding is not a failure, even though the
+                // contract has to deliver it on the error channel: ResultPayload requires
+                // an AnalysisFrame and a tool result does not have one yet. Presenting it
+                // in the failure colours tells the reader the opposite of what happened.
+                turn.error.code === "TOOL_RUN_NOT_RENDERABLE" ? (
+                  <div className="mt-5" aria-live="polite">
+                    <p className="whitespace-pre-wrap leading-relaxed text-slate-200">
+                      {turn.error.message}
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Araç çalıştı; sonucu henüz tablo veya grafik olarak gösterilemiyor.
+                    </p>
+                  </div>
+                ) : (
+                  <p
+                    className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200"
+                    role="alert"
+                  >
+                    {turn.error.message}
+                    <span className="mt-1 block text-xs text-amber-300/70">
+                      {turn.error.code}
+                      {turn.error.retryable ? " · tekrar denenebilir" : " · tekrar denemeyin"}
+                    </span>
+                  </p>
+                )
               ) : null}
 
               {turn.answer ? (
