@@ -7,12 +7,15 @@ that matters is not an exception - it is a confident answer produced by the wron
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from kkb_agent.agent.router import (
     TOOLS,
     ToolChoice,
     rule_choice,
+    run_tool,
     select_tool,
     tool_choice_schema,
 )
@@ -44,10 +47,14 @@ class TestTheRules:
         )
         assert choice.tool == "url_agent"
 
-    def test_an_ordinary_data_question_matches_nothing_rather_than_guessing(self):
+    def test_a_question_matching_no_cue_falls_through_rather_than_guessing(self):
         """The cue lists are narrow on purpose. A question this router cannot place must
-        fall through to the existing honest refusal, not to the nearest tool."""
-        assert rule_choice("2021-2025 arası konut kredisi bakiyesini göster").tool is None
+        reach the existing honest refusal, not the nearest tool. Retrieval will happily
+        resolve almost anything to *some* series - "Bugün hava nasıl?" finds hava
+        taşımacılığı credits - so routing on resolution alone would answer a weather
+        question with loan data."""
+        assert rule_choice("Konut kredisi bakiyesi nedir?").tool is None
+        assert rule_choice("Bugün hava nasıl?").tool is None
 
     def test_the_published_turn_one_question_is_not_hijacked_by_causality(self):
         """It contains 'neden', and turn 1 answers it with its own analysis. A cue list
@@ -147,3 +154,66 @@ class _FakeClient:
             message = type("M", (), {"content": content})()
 
         return type("R", (), {"choices": [_Msg()]})()
+
+
+GOLD = Path(__file__).resolve().parents[3] / "data" / "gold" / "lakehouse.duckdb"
+needs_catalog = pytest.mark.skipif(not GOLD.exists(), reason="gold catalog not built")
+
+
+class TestDispatchWithoutACatalog:
+    """The refusals, which are answers rather than errors and must not need data."""
+
+    def test_an_unroutable_question_refuses_in_turkish(self):
+        run = run_tool("Bugün hava nasıl?", GOLD)
+        assert run.choice.tool is None
+        assert run.ran is False
+        assert "yönlendirilemedi" in run.refusal
+
+    def test_a_tool_we_have_not_built_says_so_rather_than_looking_unroutable(self):
+        run = run_tool(
+            "İnternette ara", GOLD, mia_client=_FakeClient('{"tool":"web_search","reason":"x"}')
+        )
+        assert run.choice.tool == "web_search"
+        assert "henüz geliştirilmedi" in run.refusal
+
+    def test_a_url_tool_choice_without_a_url_refuses(self):
+        run = run_tool(
+            "bir şeyler oku", GOLD, mia_client=_FakeClient('{"tool":"url_agent","reason":"x"}')
+        )
+        assert "URL bulunamadı" in run.refusal
+
+
+@needs_catalog
+class TestEveryBuiltToolIsReachable:
+    """The point of the whole exercise. Before this, all five had zero call sites outside
+    their own package: built, tested, and unreachable by asking a question."""
+
+    def test_anomaly(self):
+        run = run_tool("Konut kredisi bakiyesinde aykırı değer var mı?", GOLD)
+        assert run.choice.tool == "anomaly"
+        assert run.ran and run.result.observed_count > 0
+
+    def test_change_detection(self):
+        run = run_tool("Konut kredisi bakiyesinde yapısal kırılma nerede?", GOLD)
+        assert run.choice.tool == "change_detection"
+        assert run.ran and run.result.observation_count > 0
+
+    def test_causality_reaches_the_tool_and_its_refusal_counts_as_running(self):
+        """`not_identifiable` is the tool answering, not the router failing. Most Turkish
+        macro pairs over 2021-2026 trend together; a causality tool that always returns a
+        verdict would be confidently wrong."""
+        run = run_tool("Konut kredisi ile konut fiyat endeksi arasında nedensellik var mı?", GOLD)
+        assert run.choice.tool == "causality"
+        assert run.ran and run.result.status is not None
+        assert len(run.series_ids) == 2 and run.series_ids[0] != run.series_ids[1]
+
+    def test_lakehouse_answers_an_explicit_data_request(self):
+        run = run_tool("2021-2025 arası konut kredisi bakiyesini göster", GOLD)
+        assert run.choice.tool == "lakehouse"
+        assert run.ran and run.result.series_id
+
+    def test_a_weather_question_is_refused_rather_than_answered_with_air_transport_loans(self):
+        """Retrieval resolves 'hava' to hava taşımacılığı credits. Routing anything that
+        resolves to the lakehouse would have answered this with loan data and looked
+        computed doing it - which is why the cue lists stay narrow."""
+        assert run_tool("Bugün hava nasıl?", GOLD).ran is False
