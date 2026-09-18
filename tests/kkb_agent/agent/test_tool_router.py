@@ -112,12 +112,10 @@ class TestSelection:
         assert choice.chosen_by == "rules"
 
 
-class TestWhatIsNotBuiltYet:
-    def test_web_search_is_selectable_but_not_routable(self):
-        """The brief lists six tools and we have five. Selecting it and refusing is honest;
-        omitting it would make a web-search question look merely unroutable."""
+class TestRoutability:
+    def test_web_search_is_selectable_and_routable(self):
         assert "web_search" in TOOLS
-        assert ToolChoice("web_search", "", "rules").routable is False
+        assert ToolChoice("web_search", "", "rules").routable is True
 
     def test_a_built_tool_is_routable(self):
         assert ToolChoice("anomaly", "", "rules").routable is True
@@ -169,12 +167,24 @@ class TestDispatchWithoutACatalog:
         assert run.ran is False
         assert "yönlendirilemedi" in run.refusal
 
-    def test_a_tool_we_have_not_built_says_so_rather_than_looking_unroutable(self):
+    def test_web_search_runs_through_an_injected_provider_neutral_tool(self):
+        from kkb_agent.tools.web_search import WebSearchResult
+
+        class FakeSearchTool:
+            def search(self, query, *, language):
+                assert query == "İnternette ara"
+                assert language == "tr"
+                return WebSearchResult(query, (), ())
+
         run = run_tool(
-            "İnternette ara", GOLD, mia_client=_FakeClient('{"tool":"web_search","reason":"x"}')
+            "İnternette ara",
+            GOLD,
+            mia_client=_FakeClient('{"tool":"web_search","reason":"x"}'),
+            web_search_tool=FakeSearchTool(),
         )
         assert run.choice.tool == "web_search"
-        assert "henüz geliştirilmedi" in run.refusal
+        assert run.ran
+        assert run.result.items == ()
 
     def test_a_url_tool_choice_without_a_url_refuses(self):
         run = run_tool(

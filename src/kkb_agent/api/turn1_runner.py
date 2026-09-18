@@ -295,17 +295,19 @@ class TurnOneAskRunner:
                 yield _completion(request, sequence + 1, "succeeded", frame.version)
                 return
 
+        if run.choice.tool == "web_search" and run.ran:
+            yield _stage_start(request, sequence, "verification")
+            sequence += 1
+            yield _stage_end(request, sequence, "verification", "succeeded")
+            sequence += 1
+
         # Tool results have no AnalysisFrame yet, and ResultPayload requires one - so the
         # outcome is reported on the error channel rather than faked into a frame.
         yield _error(
             request,
             sequence,
             code="TOOL_RUN_NOT_RENDERABLE" if run.ran else "TOOL_REFUSED",
-            message=(
-                f"{_tool_summary(run)} Bu araç sonucu henüz tabloya dönüştürülmüyor."
-                if run.ran
-                else (run.refusal or "Soru yanıtlanamadı.")
-            ),
+            message=_tool_message(run) if run.ran else (run.refusal or "Soru yanıtlanamadı."),
             retryable=False,
         )
         yield _completion(request, sequence + 1, "failed", request.version)
@@ -375,10 +377,29 @@ def _tool_summary(run) -> str:
         body = f"belge okundu ({run.result.kind})"
     elif kind == "LoadedSeries":
         body = f"seri: {run.result.name}"
+    elif kind == "WebSearchResult":
+        if not run.result.items:
+            body = "arama tamamlandı; sonuç bulunamadı"
+        else:
+            citations = "; ".join(
+                f"{item.title or 'Başlıksız sonuç'} — {item.url}" for item in run.result.items[:3]
+            )
+            body = f"{len(run.result.items)} sonuç; kaynaklar: {citations}"
     else:
         body = kind
     series = f" [{', '.join(run.series_ids)}]" if run.series_ids else ""
     return f"{run.choice.tool} aracı çalıştı — {body}{series}."
+
+
+def _tool_message(run) -> str:
+    """The same finding, sized for the error channel.
+
+    `ErrorPayload.user_message` caps at 500 characters and a web-search summary carries
+    citations, so the text that goes out when no table could be built is truncated. The
+    result channel has no such cap and gets the summary whole.
+    """
+    summary = f"{_tool_summary(run)} Bu araç sonucu henüz tabloya dönüştürülmüyor."
+    return summary if len(summary) <= 500 else summary[:497] + "..."
 
 
 def answer_text(result: TurnResult | TurnTwoResult | TurnThreeResult, question: str) -> str:

@@ -115,9 +115,10 @@ Son iki değişken tanımlanmamışsa yollar `DATA_DIR/gold/` altında türetili
 satırı kaldırın veya yeni konumla uyumlu güncelleyin. DuckDB gömülü bir veritabanıdır;
 sunucu/container gerekmez. LanceDB şu aşamada yalnızca boş yerel katalog deposudur.
 
-`SEARXNG_URL=http://localhost:8888` mevcut sözleşmede korunur. DECISIONS.md #15
-hâlâ açık olduğu için SearxNG servisi veya Docker Compose eklenmedi. Sağlık
-kontrolü bu URL'yi kullanmaz.
+Yerel web araması için `docker compose up -d searxng` komutu SearxNG JSON API'sini
+`http://localhost:8888` üzerinde başlatır. Backend adresi `SEARXNG_URL` ile değiştirilebilir.
+Normal testler Docker veya canlı ağ gerektirmez. Sağlık kontrolü bu URL'yi kullanmaz;
+ulaşılamayan arama servisi yalnızca web araması sırasında güvenli bir ret üretir.
 
 ## Testler ve lint
 
