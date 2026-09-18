@@ -102,6 +102,9 @@ WINDOW_END = date(2025, 12, 1)
 # How many sampled plans to try before falling back. Two is not enough - the model is
 # right often enough that a third attempt converts most failures, and each is ~3s.
 PLAN_ATTEMPTS = 3
+# Wall-clock ceiling across all plan attempts. One MIA plan costs ~50s at the measured
+# ~8 tokens/second, so without this a retry alone can outlast a demo slot.
+PLAN_BUDGET_SECONDS = 25.0
 
 BALANCE_KEY = "konut_kredisi_bakiye"
 RATE_KEY = "konut_kredisi_faizi"
@@ -294,7 +297,17 @@ def _planned(
     # yields a correct four-step plan on one call and a repeated add_column on the next.
     # Each attempt is executed on a fresh frame, so a plan that fails halfway leaves
     # nothing behind for the next one to build on.
+    #
+    # Attempts are also bounded in wall-clock time. MIA writes roughly eight tokens a
+    # second, so a plan of a few hundred tokens costs the better part of a minute, and a
+    # second attempt doubles it. The scripted plan produces the same table, so spending
+    # more than PLAN_BUDGET_SECONDS to have the model produce it is a bad trade in front
+    # of anyone watching. The result says which plan it used either way.
+    deadline = time.monotonic() + PLAN_BUDGET_SECONDS
     for attempt in range(PLAN_ATTEMPTS):
+        if attempt and time.monotonic() >= deadline:
+            attempts.append(f"{attempt + 1}: skipped, {PLAN_BUDGET_SECONDS:g}s plan budget spent")
+            break
         try:
             operations = planner.plan(
                 question,

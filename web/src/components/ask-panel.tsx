@@ -164,11 +164,15 @@ export function AskPanel() {
     if (!asked || running) return;
 
     const turnId = `turn-${turns.length + 1}-${Date.now()}`;
-    const previous = turns[turns.length - 1];
+    // Continue from the most recent turn that actually produced a table, not simply the
+    // previous one: a question that failed in between must not throw away the analysis
+    // the turns before it built.
+    const previous = [...turns].reverse().find((turn) => turn.frame);
     setTurns((current) => [
       ...current,
       { id: turnId, question: asked, stages: [], startedAt: Date.now() },
     ]);
+    setQuestion("");
     setRunning(true);
 
     const controller = new AbortController();
@@ -275,16 +279,31 @@ export function AskPanel() {
               ) : null}
 
               {turn.error ? (
-                <p
-                  className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200"
-                  role="alert"
-                >
-                  {turn.error.message}
-                  <span className="mt-1 block text-xs text-amber-300/70">
-                    {turn.error.code}
-                    {turn.error.retryable ? " · tekrar denenebilir" : " · tekrar denemeyin"}
-                  </span>
-                </p>
+                // A tool that ran and produced a finding is not a failure, even though the
+                // contract has to deliver it on the error channel: ResultPayload requires
+                // an AnalysisFrame and a tool result does not have one yet. Presenting it
+                // in the failure colours tells the reader the opposite of what happened.
+                turn.error.code === "TOOL_RUN_NOT_RENDERABLE" ? (
+                  <div className="mt-5" aria-live="polite">
+                    <p className="whitespace-pre-wrap leading-relaxed text-slate-200">
+                      {turn.error.message}
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Araç çalıştı; sonucu henüz tablo veya grafik olarak gösterilemiyor.
+                    </p>
+                  </div>
+                ) : (
+                  <p
+                    className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200"
+                    role="alert"
+                  >
+                    {turn.error.message}
+                    <span className="mt-1 block text-xs text-amber-300/70">
+                      {turn.error.code}
+                      {turn.error.retryable ? " · tekrar denenebilir" : " · tekrar denemeyin"}
+                    </span>
+                  </p>
+                )
               ) : null}
 
               {turn.answer ? (

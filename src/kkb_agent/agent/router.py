@@ -288,9 +288,15 @@ def run_tool(
     mia_client=None,
     fetcher=None,
     web_search_tool=None,
+    choice=None,
 ) -> ToolRun:
-    """Choose a tool, give it what it needs, run it."""
-    choice = select_tool(question, mia_client=mia_client)
+    """Choose a tool, give it what it needs, run it.
+
+    `choice` lets a caller that has already selected the tool pass it in, so it can tell
+    the user which tool is running before the run starts rather than afterwards.
+    """
+    if choice is None:
+        choice = select_tool(question, mia_client=mia_client)
 
     if choice.tool is None:
         return ToolRun(choice, refusal="Bu soru mevcut araçlardan hiçbirine yönlendirilemedi.")

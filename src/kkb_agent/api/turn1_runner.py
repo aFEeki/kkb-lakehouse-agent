@@ -16,11 +16,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import unicodedata
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 
-from kkb_agent.agent.router import run_tool
+from kkb_agent.agent.composition import create_operation_executor
+from kkb_agent.agent.router import run_tool, select_tool
 from kkb_agent.agent.turn1 import TurnResult, build_turn1
 from kkb_agent.agent.turn2 import TurnTwoResult, build_turn2
 from kkb_agent.agent.turn3 import HPI_KEY, TurnThreeResult, build_turn3
@@ -41,7 +43,15 @@ from kkb_agent.api.contracts import (
     ToolSelectedPayload,
 )
 from kkb_agent.api.frame_store import AnalysisFrameStore, AnalysisFrameStoreError
+from kkb_agent.catalog.identity import turkish_casefold
 from kkb_agent.catalog.series_source import CatalogSeriesSource
+from kkb_agent.frame import (
+    AddColumnParameters,
+    AnalysisFrame,
+    Operation,
+    OperationType,
+    Spine,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,20 +59,58 @@ _FAILED = "Analiz tamamlanamadı. Lütfen tekrar deneyin."
 _SENTINEL = object()
 
 
+def _fold(text: str) -> str:
+    """Casefold and strip Turkish diacritics, so a question still matches when it is
+    typed without them.
+
+    People write "arindirir" as often as "arındırır", and the organizers' own slide
+    writes "sutun" without the u-umlaut. Matching on the accented spelling alone rejects
+    the published question as typed by the people who published it.
+    """
+    lowered = turkish_casefold(text).replace("ı", "i").replace("İ", "i")
+    decomposed = unicodedata.normalize("NFKD", lowered)
+    stripped = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", stripped.strip())
+
+
 def classify_published_turn(question: str) -> int | None:
     """Recognize only the three bounded Turkish demo intents."""
-    normalized = re.sub(r"\s+", " ", question.strip().casefold())
-    if any(
-        term in normalized for term in ("konut fiyat endeksi", "fiyat endeksini", "kfe")
-    ) and any(term in normalized for term in ("ekle", "sütun", "nedeni", "olabilir")):
-        return 3
-    if "kredi" in normalized and any(
-        term in normalized for term in ("enflasyondan arındır", "reel", "sabit fiyat", "deflat")
+    normalized = _fold(question)
+
+    def has(*terms: str) -> bool:
+        return any(_fold(term) in normalized for term in terms)
+
+    if has("konut fiyat endeksi", "fiyat endeksini", "kfe") and has(
+        "ekle", "sütun", "nedeni", "olabilir"
     ):
+        return 3
+    if has("kredi") and has("enflasyondan arındır", "reel", "sabit fiyat", "deflat"):
         return 2
-    if "konut" in normalized and "kredi" in normalized and "faiz" in normalized:
+    if has("konut") and has("kredi") and has("faiz"):
         return 1
     return None
+
+
+def _out_of_order_message(requested: int, expected: int) -> str:
+    """Say which step is missing, in the words the user would use to ask for it.
+
+    Turns 2 and 3 modify the table turn 1 builds, so asking for one first is not a
+    malformed request - it is a request that arrived early, and the reply should be the
+    sentence that gets the user unstuck.
+    """
+    ask_first = {
+        1: "2021-2025 arasında konut kredileri ve faiz oranlarını aylık göster.",
+        2: "Konut kredisi tutarlarını enflasyondan arındırır mısın?",
+    }
+    if requested > expected:
+        return (
+            f"Bu soru mevcut tabloyu değiştiriyor, ama o tablo henüz yok. "
+            f"Önce şunu sorun: “{ask_first[expected]}”"
+        )
+    return (
+        "Bu adım bu analizde zaten tamamlandı. Tabloyu sıfırdan kurmak için sayfayı "
+        "yenileyip ilk sorudan başlayın."
+    )
 
 
 class TurnOneAskRunner:
@@ -114,12 +162,14 @@ class TurnOneAskRunner:
             return
 
         if requested_turn != expected_turn:
-            # A real turn, asked out of order. Still a sequencing error, not a tool question.
+            # A real turn, asked out of order. Still a sequencing error, not a tool
+            # question - so say which step is missing and what to ask for, rather than
+            # naming an internal concept the reader has no way to act on.
             yield _error(
                 request,
                 sequence,
                 code="UNSUPPORTED_PUBLISHED_TURN",
-                message="Bu soru mevcut analiz sürümü için desteklenen yayınlanmış tur değil.",
+                message=_out_of_order_message(requested_turn, expected_turn),
                 retryable=False,
             )
             yield _completion(request, sequence + 1, "failed", request.version)
@@ -201,22 +251,49 @@ class TurnOneAskRunner:
     async def _route(self, request: AskRequest, sequence: int):
         """Hand a non-published question to the tool router and stream what it did."""
         client = getattr(self._planner, "_mia_client", None)
-        run = await asyncio.to_thread(run_tool, request.question, self._catalog, mia_client=client)
+        choice = await asyncio.to_thread(select_tool, request.question, mia_client=client)
 
         # Only open a stage when a tool was actually selected: a stage that starts and
         # immediately fails reads as a broken product, where a bare refusal reads as an
         # answer.
-        if run.choice.tool is not None:
-            yield _stage_start(request, sequence, "agentic_analytics")
-            sequence += 1
-            yield _tool_selected(
-                request, sequence, _EVENT_NAME.get(run.choice.tool, run.choice.tool)
+        if choice.tool is None:
+            yield _error(
+                request,
+                sequence,
+                code="TOOL_REFUSED",
+                message="Bu soru mevcut araçlardan hiçbirine yönlendirilemedi.",
+                retryable=False,
             )
-            sequence += 1
-            yield _stage_end(
-                request, sequence, "agentic_analytics", "succeeded" if run.ran else "failed"
-            )
-            sequence += 1
+            yield _completion(request, sequence + 1, "failed", request.version)
+            return
+
+        # Announce the tool before running it, not after. The run reads a catalog series
+        # and can take seconds; a stage that only appears once it is already over leaves
+        # the screen empty for exactly as long as the work takes.
+        yield _stage_start(request, sequence, "agentic_analytics")
+        sequence += 1
+        yield _tool_selected(request, sequence, _EVENT_NAME.get(choice.tool, choice.tool))
+        sequence += 1
+
+        run = await asyncio.to_thread(
+            run_tool, request.question, self._catalog, mia_client=client, choice=choice
+        )
+
+        yield _stage_end(
+            request, sequence, "agentic_analytics", "succeeded" if run.ran else "failed"
+        )
+        sequence += 1
+
+        # A tool that ran and produced a finding is an answer. Deliver it as one whenever
+        # the series it read can be put on a spine, so the reader gets the numbers behind
+        # the sentence instead of being told to take it on trust.
+        if run.ran:
+            frame = await asyncio.to_thread(_tool_frame, self._catalog, request.analysis_id, run)
+            if frame is not None:
+                self._frame_store.put(frame)
+                yield _frame_result(request, sequence, frame, _tool_summary(run))
+                yield _completion(request, sequence + 1, "succeeded", frame.version)
+                return
 
         if run.choice.tool == "web_search" and run.ran:
             yield _stage_start(request, sequence, "verification")
@@ -230,7 +307,7 @@ class TurnOneAskRunner:
             request,
             sequence,
             code="TOOL_RUN_NOT_RENDERABLE" if run.ran else "TOOL_REFUSED",
-            message=_tool_summary(run) if run.ran else (run.refusal or "Soru yanıtlanamadı."),
+            message=_tool_message(run) if run.ran else (run.refusal or "Soru yanıtlanamadı."),
             retryable=False,
         )
         yield _completion(request, sequence + 1, "failed", request.version)
@@ -238,6 +315,53 @@ class TurnOneAskRunner:
 
 # The contract's tool vocabulary predates the router's; web_url is the same tool.
 _EVENT_NAME = {"url_agent": "web_url"}
+
+
+def _tool_frame(catalog, analysis_id: str, run) -> AnalysisFrame | None:
+    """Put the series a tool actually read onto a spine, so its finding can be a result.
+
+    A tool answers about a series; without the series, the reader gets a sentence and no
+    way to check it. The columns are added through the ordinary `add_column` executor, so
+    the same lineage, left-join and spine guarantees apply as anywhere else — this is the
+    real table, not a display copy assembled for the occasion.
+    """
+    if not run.series_ids:
+        return None
+    source = CatalogSeriesSource(catalog)
+    try:
+        loaded = [source.fetch(series_id) for series_id in run.series_ids]
+        if any(item is None for item in loaded):
+            return None
+        periods = sorted({period for item in loaded for period in item.values})
+        if not periods:
+            return None
+
+        frame = AnalysisFrame(
+            frame_id=analysis_id, spine=Spine(values=tuple(periods), label="Dönem")
+        )
+        executor = create_operation_executor(series_source=source)
+        for index, series_id in enumerate(run.series_ids):
+            frame = executor.execute(
+                frame,
+                Operation(
+                    operation_id=f"tool-add-{index}",
+                    kind=OperationType.ADD_COLUMN,
+                    parameters=AddColumnParameters(
+                        series_reference=series_id, column_key=series_id
+                    ),
+                    timestamp=datetime.now(UTC),
+                    source_version=frame.version,
+                    resulting_version=frame.version + 1,
+                ),
+            )
+        return frame
+    except Exception:
+        # A tool finding is worth delivering even when the table cannot be built; the
+        # caller falls back to reporting the finding on its own.
+        logger.exception("could not build a frame for the %s tool run", run.choice.tool)
+        return None
+    finally:
+        source.close()
 
 
 def _tool_summary(run) -> str:
@@ -264,10 +388,17 @@ def _tool_summary(run) -> str:
     else:
         body = kind
     series = f" [{', '.join(run.series_ids)}]" if run.series_ids else ""
-    summary = (
-        f"{run.choice.tool} aracı çalıştı — {body}{series}. "
-        "Bu araç sonucu henüz tabloya dönüştürülmüyor."
-    )
+    return f"{run.choice.tool} aracı çalıştı — {body}{series}."
+
+
+def _tool_message(run) -> str:
+    """The same finding, sized for the error channel.
+
+    `ErrorPayload.user_message` caps at 500 characters and a web-search summary carries
+    citations, so the text that goes out when no table could be built is truncated. The
+    result channel has no such cap and gets the summary whole.
+    """
+    summary = f"{_tool_summary(run)} Bu araç sonucu henüz tabloya dönüştürülmüyor."
     return summary if len(summary) <= 500 else summary[:497] + "..."
 
 
@@ -284,7 +415,11 @@ def answer_text(result: TurnResult | TurnTwoResult | TurnThreeResult, question: 
         return f"Turn 2 tamamlandı: {derived.label} kolonu mevcut tabloya eklendi."
     if isinstance(result, TurnThreeResult):
         return result.frame.findings[-1].statement
-    if question.strip().casefold() != _question().strip().casefold():
+    # Disclose only when turn 1 ran for a question it does not actually cover. Comparing
+    # the wording verbatim fired on every paraphrase of the same question, so a correct
+    # answer to "konut kredileri ve faiz oranlarını göster" opened by telling the reader
+    # their question had not been answered - which was not true, and read as a failure.
+    if classify_published_turn(question) != 1:
         lines.append(
             f"Not: bu sürüm yalnızca şu soruyu yanıtlıyor — “{_question()}”. "
             "Sorduğunuz soru için henüz bir analiz üretilmiyor."
@@ -346,6 +481,17 @@ def _result(
         **_envelope(request, sequence, result.frame.version),
         type="result",
         payload=ResultPayload(frame=result.frame, answer=answer_text(result, request.question)),
+    )
+
+
+def _frame_result(
+    request: AskRequest, sequence: int, frame: AnalysisFrame, answer: str
+) -> ResultEvent:
+    """A result assembled from a frame and an answer, for paths with no TurnResult."""
+    return ResultEvent(
+        **_envelope(request, sequence, frame.version),
+        type="result",
+        payload=ResultPayload(frame=frame, answer=answer),
     )
 
 
