@@ -220,7 +220,6 @@ class TestAppWiring:
         """The guard against writing a check so strict it rejects working data."""
         assert _turn1_catalog_ready(GOLD) is True
 
-
     @needs_catalog
     def test_ask_streams_server_sent_events(self):
         # The catalog path is passed explicitly: conftest chdirs every test into a tmp
