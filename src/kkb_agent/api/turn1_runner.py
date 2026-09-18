@@ -218,6 +218,12 @@ class TurnOneAskRunner:
             )
             sequence += 1
 
+        if run.choice.tool == "web_search" and run.ran:
+            yield _stage_start(request, sequence, "verification")
+            sequence += 1
+            yield _stage_end(request, sequence, "verification", "succeeded")
+            sequence += 1
+
         # Tool results have no AnalysisFrame yet, and ResultPayload requires one - so the
         # outcome is reported on the error channel rather than faked into a frame.
         yield _error(
@@ -247,13 +253,22 @@ def _tool_summary(run) -> str:
         body = f"belge okundu ({run.result.kind})"
     elif kind == "LoadedSeries":
         body = f"seri: {run.result.name}"
+    elif kind == "WebSearchResult":
+        if not run.result.items:
+            body = "arama tamamlandı; sonuç bulunamadı"
+        else:
+            citations = "; ".join(
+                f"{item.title or 'Başlıksız sonuç'} — {item.url}" for item in run.result.items[:3]
+            )
+            body = f"{len(run.result.items)} sonuç; kaynaklar: {citations}"
     else:
         body = kind
     series = f" [{', '.join(run.series_ids)}]" if run.series_ids else ""
-    return (
+    summary = (
         f"{run.choice.tool} aracı çalıştı — {body}{series}. "
         "Bu araç sonucu henüz tabloya dönüştürülmüyor."
     )
+    return summary if len(summary) <= 500 else summary[:497] + "..."
 
 
 def answer_text(result: TurnResult | TurnTwoResult | TurnThreeResult, question: str) -> str:

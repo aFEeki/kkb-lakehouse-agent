@@ -165,6 +165,12 @@ class SafeURLFetcher:
                 page_count=page_count,
             )
 
+    def validate_public_url(self, url: str) -> str:
+        """Validate and canonicalize a public result URL without fetching it."""
+        parsed = self._validated_url(url).copy_with(fragment=None)
+        self._validate_public_target(parsed)
+        return str(parsed)
+
     def _validated_url(self, value: str) -> httpx.URL:
         try:
             parsed = httpx.URL(value)
