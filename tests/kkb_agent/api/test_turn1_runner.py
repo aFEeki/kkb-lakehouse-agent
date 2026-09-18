@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +15,7 @@ from kkb_agent.api.main import _turn1_catalog_ready, create_app
 from kkb_agent.api.turn1_runner import TurnOneAskRunner
 from kkb_agent.catalog.schema import CATALOG_DDL, OBSERVATIONS_DDL
 from kkb_agent.frame import AnalysisFrame, Spine
+from kkb_agent.regression import build_snapshot_database
 
 GOLD = Path(__file__).resolve().parents[3] / "data" / "gold" / "lakehouse.duckdb"
 needs_catalog = pytest.mark.skipif(
@@ -346,80 +346,6 @@ def test_a_stage_started_before_failure_is_closed_and_error_is_sanitized(tmp_pat
     assert events[-1].payload.outcome == "failed"
 
 
-def _three_turn_catalog(path):
-    connection = duckdb.connect(str(path))
-    connection.execute(CATALOG_DDL)
-    connection.execute(OBSERVATIONS_DDL)
-    rows = (
-        (
-            "bddk_aylik.t04.taraf10001.t_ketici_kredileri_konut",
-            "bddk_aylik",
-            "Konut Kredileri",
-            "stock",
-            "Milyon TL",
-            "TRY",
-            "M",
-            "period_end",
-        ),
-        ("evds.TP.KTF12", "evds", "Konut Kredisi Faizi", "rate", "%", "%", "W", "mean"),
-        (
-            "evds.TP.GENENDEKS.T1",
-            "evds",
-            "Tüketici Fiyat Endeksi TÜFE",
-            "index",
-            "Endeks",
-            "index",
-            "M",
-            "period_end",
-        ),
-        (
-            "evds.TP.KFE.TR",
-            "evds",
-            "Konut Fiyat Endeksi KFE",
-            "index",
-            "Endeks",
-            "index",
-            "M",
-            "period_end",
-        ),
-    )
-    for series_id, source, name, measure, raw_unit, unit, frequency, aggregation in rows:
-        connection.execute(
-            "INSERT INTO series_catalog (series_id, source, source_ref, name_tr, raw_label, "
-            "measure_type, sector_scope, currency_basis, unit_raw, unit_normalized, "
-            "scale_factor, cumulative_mode, native_freq, aggregation_rule, observations, "
-            "nonzero_observations, source_hash) VALUES (?, ?, ?, ?, ?, ?, 'Sektör', "
-            "'Toplam', ?, ?, 1, 'none', ?, ?, 60, 60, ?)",
-            [
-                series_id,
-                source,
-                series_id,
-                name,
-                name,
-                measure,
-                raw_unit,
-                unit,
-                frequency,
-                aggregation,
-                "a" * 64,
-            ],
-        )
-    for index in range(60):
-        period = date(2021 + index // 12, index % 12 + 1, 1)
-        rate = 20 + index if index < 48 else 68 - (index - 47)
-        for series_id, value in (
-            (rows[0][0], 100 + index),
-            (rows[1][0], rate),
-            (rows[2][0], 100 + index),
-            (rows[3][0], 80 + index),
-        ):
-            connection.execute(
-                "INSERT INTO series_observations VALUES (?, ?, ?, ?)",
-                [series_id, period, value, value],
-            )
-    connection.close()
-
-
 def test_real_three_request_api_flow_uses_one_store(tmp_path):
     from kkb_agent.agent.turn1 import BALANCE_KEY, RATE_KEY
     from kkb_agent.agent.turn2 import CPI_KEY
@@ -429,7 +355,11 @@ def test_real_three_request_api_flow_uses_one_store(tmp_path):
     from kkb_agent.config import Settings
 
     database = tmp_path / "three-turn.duckdb"
-    _three_turn_catalog(database)
+    snapshot = (
+        Path(__file__).resolve().parents[2]
+        / "fixtures/regression/published_three_turn_snapshot.json"
+    )
+    build_snapshot_database(snapshot, database)
     app = create_app(Settings(duckdb_path=database))
     analysis_id = "three-turn-fixture"
     with TestClient(app) as client:

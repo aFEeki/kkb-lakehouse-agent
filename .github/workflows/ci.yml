@@ -37,6 +37,8 @@ jobs:
         run: ruff format --check src tests scripts
       - name: Unit tests (no external credentials)
         run: python -m pytest -q
+      - name: Published three-turn regression
+        run: python scripts/run_regression.py
 
       # SCRUM-32. Separate from the unit tests so a red invariant is legible on the status
       # page as a data-correctness failure rather than one more failing test: these check
