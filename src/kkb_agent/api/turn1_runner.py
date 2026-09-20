@@ -276,7 +276,12 @@ class TurnOneAskRunner:
         sequence += 1
 
         run = await asyncio.to_thread(
-            run_tool, request.question, self._catalog, mia_client=client, choice=choice
+            run_tool,
+            request.question,
+            self._catalog,
+            mia_client=client,
+            planner=self._planner,
+            choice=choice,
         )
 
         yield _stage_end(
@@ -325,6 +330,10 @@ def _tool_frame(catalog, analysis_id: str, run) -> AnalysisFrame | None:
     the same lineage, left-join and spine guarantees apply as anywhere else — this is the
     real table, not a display copy assembled for the occasion.
     """
+    # The generic analysis already built one, with its own findings on it.
+    existing = getattr(run.result, "frame", None)
+    if existing is not None:
+        return existing
     if not run.series_ids:
         return None
     source = CatalogSeriesSource(catalog)
@@ -367,6 +376,8 @@ def _tool_frame(catalog, analysis_id: str, run) -> AnalysisFrame | None:
 def _tool_summary(run) -> str:
     """One Turkish line naming the tool, what it found, and on which series."""
     kind = type(run.result).__name__
+    if kind == "Analysis":
+        return "\n".join(f.statement for f in run.result.frame.findings)
     if kind == "AnomalyResult":
         body = f"{len(run.result.anomalies)} aykırı gözlem ({run.result.observed_count} gözlemde)"
     elif kind == "ChangeDetectionResult":

@@ -217,10 +217,13 @@ class TestEveryBuiltToolIsReachable:
         assert run.ran and run.result.status is not None
         assert len(run.series_ids) == 2 and run.series_ids[0] != run.series_ids[1]
 
-    def test_lakehouse_answers_an_explicit_data_request(self):
+    def test_lakehouse_runs_the_generic_analysis(self):
+        """Lakehouse is now the full path for an arbitrary question: resolve the series,
+        plan over it, compute findings - not a lookup of one catalog row."""
         run = run_tool("2021-2025 arası konut kredisi bakiyesini göster", GOLD)
         assert run.choice.tool == "lakehouse"
-        assert run.ran and run.result.series_id
+        assert run.ran
+        assert run.result.series_ids and run.result.frame.findings
 
     def test_a_weather_question_is_refused_rather_than_answered_with_air_transport_loans(self):
         """Retrieval resolves 'hava' to hava taşımacılığı credits. Routing anything that
