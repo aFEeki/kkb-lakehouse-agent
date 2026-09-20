@@ -412,7 +412,7 @@ def answer_text(result: TurnResult | TurnTwoResult | TurnThreeResult, question: 
     lines: list[str] = []
     if isinstance(result, TurnTwoResult):
         derived = result.frame.columns[-1]
-        return f"Turn 2 tamamlandı: {derived.label} kolonu mevcut tabloya eklendi."
+        return f"{derived.label} kolonu, mevcut tablo bozulmadan eklendi."
     if isinstance(result, TurnThreeResult):
         return result.frame.findings[-1].statement
     # Disclose only when turn 1 ran for a question it does not actually cover. Comparing
