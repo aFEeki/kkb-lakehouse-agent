@@ -107,14 +107,16 @@ def tool_choice_schema() -> dict:
 _SYSTEM = (
     "Bir finansal veri ajanının araç seçicisisin. Kullanıcının sorusunu oku ve hangi "
     "aracın çalıştırılması gerektiğini seç.\n\n"
-    "lakehouse: kataloğdaki seriyi sorgulama, birleştirme, gösterme\n"
+    "lakehouse: BDDK/TCMB verilerinden bir seriyi sorgulama, gösterme, seyrini "
+    "anlatma. Türk bankacılık veya makro verisiyle ilgili HER soru buraya gider.\n"
     "anomaly: aykırı değer, olağandışı hareket, sapma tespiti\n"
     "causality: iki seri arasında neden-sonuç ilişkisi olup olmadığı\n"
     "change_detection: seviye, trend veya rejim kırılması tespiti\n"
     "url_agent: soruda verilen bir URL'deki içeriği okuma\n"
     "web_search: internette arama\n\n"
-    "Hiçbiri uymuyorsa tool alanını null bırak. Emin değilsen null bırak: yanlış araç "
-    "seçmek, seçmemekten kötüdür."
+    "Soru Türk bankacılık/finans verisiyle ilgiliyse mutlaka bir araç seç; çoğu "
+    "durumda lakehouse doğrudur. Yalnızca soru bu alanın tamamen dışındaysa (hava "
+    "durumu, yemek, sohbet) null bırak."
 )
 
 
@@ -289,6 +291,7 @@ def run_tool(
     fetcher=None,
     web_search_tool=None,
     choice=None,
+    planner=None,
 ) -> ToolRun:
     """Choose a tool, give it what it needs, run it.
 
@@ -313,6 +316,15 @@ def run_tool(
         return _run_url_agent(question, choice, fetcher)
 
     from kkb_agent.catalog.series_source import CatalogSeriesSource
+
+    if choice.tool == "lakehouse":
+        # The full generic path: resolve, let the model plan operations, compute findings.
+        from kkb_agent.agent.analyze import NothingToAnalyse, analyze
+
+        try:
+            return ToolRun(choice, result=analyze(question, catalog, planner=planner))
+        except NothingToAnalyse:
+            return ToolRun(choice, refusal="Soru kataloğumuzdaki bir seriye çözümlenemedi.")
 
     wanted = 2 if choice.tool == "causality" else 1
     series_ids = _resolve_pair(catalog, question) if wanted == 2 else _resolve(catalog, question, 1)
