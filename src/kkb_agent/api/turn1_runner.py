@@ -20,6 +20,7 @@ import unicodedata
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from kkb_agent.agent.composition import create_operation_executor
 from kkb_agent.agent.router import run_tool, select_tool
@@ -133,6 +134,14 @@ class TurnOneAskRunner:
         sequence = 0
         requested_turn = classify_published_turn(request.question)
 
+        if requested_turn is None:
+            # Not a published turn: route it, and do not consult the stored version. A
+            # routed question stands alone, so the version carried over from the previous
+            # answer names a frame it has nothing to do with.
+            async for event in self._route(request, sequence):
+                yield event
+            return
+
         previous = None
         if request.version != 0:
             try:
@@ -155,12 +164,6 @@ class TurnOneAskRunner:
             if any("deflated_by" in column.key for column in previous.columns)
             else 2
         )
-        if requested_turn is None:
-            # Not a published turn: hand it to the tool router rather than refusing.
-            async for event in self._route(request, sequence):
-                yield event
-            return
-
         if requested_turn != expected_turn:
             # A real turn, asked out of order. Still a sequencing error, not a tool
             # question - so say which step is missing and what to ask for, rather than
@@ -197,6 +200,7 @@ class TurnOneAskRunner:
                 return await asyncio.to_thread(
                     build_turn1,
                     self._catalog,
+                    # Stable on purpose: turns 2 and 3 continue this same table.
                     frame_id=request.analysis_id,
                     planner=self._planner,
                     on_stage=on_stage,
@@ -282,7 +286,10 @@ class TurnOneAskRunner:
             mia_client=client,
             planner=self._planner,
             choice=choice,
-            frame_id=request.analysis_id,
+            # Each routed question is its own table: asking about deposits after
+            # housing loans is a new analysis, not a new version of the old one. Sharing
+            # the id made every question after the first collide in the frame store.
+            frame_id=f"{request.analysis_id}-{uuid4().hex[:8]}",
         )
 
         yield _stage_end(
