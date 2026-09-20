@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     duckdb_path: Path | None = None
     lancedb_path: Path | None = None
-    searxng_url: str = "http://localhost:8888"
+    # 127.0.0.1, not localhost: Docker publishes the container on IPv4 only, and Python
+    # resolves "localhost" to ::1 first, where nothing is listening. curl happens to
+    # prefer IPv4 and works, which is why the tool looked broken only from the app.
+    searxng_url: str = "http://127.0.0.1:8888"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     @model_validator(mode="after")
