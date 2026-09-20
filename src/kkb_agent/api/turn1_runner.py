@@ -282,6 +282,7 @@ class TurnOneAskRunner:
             mia_client=client,
             planner=self._planner,
             choice=choice,
+            frame_id=request.analysis_id,
         )
 
         yield _stage_end(

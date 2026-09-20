@@ -116,7 +116,15 @@ _SYSTEM = (
     "web_search: internette arama\n\n"
     "Soru Türk bankacılık/finans verisiyle ilgiliyse mutlaka bir araç seç; çoğu "
     "durumda lakehouse doğrudur. Yalnızca soru bu alanın tamamen dışındaysa (hava "
-    "durumu, yemek, sohbet) null bırak."
+    "durumu, yemek, sohbet) null bırak.\n\n"
+    "Örnekler:\n"
+    "  'Sermaye yeterliliği rasyosu nedir' -> lakehouse (bir veri serisi; tanım sorusu "
+    "değil)\n"
+    "  'Takipteki krediler oranı nedir' -> lakehouse\n"
+    "  'Konut kredilerinde aykırı değer var mı' -> anomaly\n"
+    "  'Bugün hava nasıl' -> null\n"
+    "'... nedir' biçimindeki sorular da veri sorusudur; serinin değerini göstererek "
+    "yanıtlanır."
 )
 
 
@@ -292,6 +300,7 @@ def run_tool(
     web_search_tool=None,
     choice=None,
     planner=None,
+    frame_id: str = "analysis",
 ) -> ToolRun:
     """Choose a tool, give it what it needs, run it.
 
@@ -322,7 +331,10 @@ def run_tool(
         from kkb_agent.agent.analyze import NothingToAnalyse, analyze
 
         try:
-            return ToolRun(choice, result=analyze(question, catalog, planner=planner))
+            return ToolRun(
+                choice,
+                result=analyze(question, catalog, planner=planner, frame_id=frame_id),
+            )
         except NothingToAnalyse:
             return ToolRun(choice, refusal="Soru kataloğumuzdaki bir seriye çözümlenemedi.")
 
