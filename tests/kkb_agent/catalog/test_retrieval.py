@@ -194,3 +194,15 @@ class TestResolve:
         r = resolve(concepts, "altın rezervleri")
         assert r.hits == ()
         assert r.best is None
+
+
+def test_filler_words_do_not_sink_a_question_that_matches():
+    """Scoring is a harmonic mean of query and concept coverage, so words the catalog can
+    never match pull the query side down. "Toplam mevduat" scored 1.000 while "Toplam
+    mevduat son 5 yılda nasıl değişti?" matched nothing at all."""
+    from kkb_agent.catalog.retrieval import tokenize
+
+    # A bare digit survives - labels do carry numbers - but the question vocabulary goes,
+    # which is what took this from no match at all to resolving.
+    assert tokenize("Toplam mevduat son 5 yılda nasıl değişti?") == ("mevduat", "5")
+    assert tokenize("Konut kredisi ne kadar arttı") == ("konut", "kredisi", "arttı")

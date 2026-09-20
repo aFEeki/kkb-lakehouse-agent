@@ -44,6 +44,34 @@ STOPWORDS = frozenset(
         "en",
         "net",
         "toplam",
+        # Question and time vocabulary. Scoring is a harmonic mean of query and concept
+        # coverage, so words the catalog can never match pull the query side down: the
+        # same phrase that scores 1.000 alone matched nothing once "son 5 yılda nasıl
+        # değişti" was appended. These carry no subject matter.
+        "nasıl",
+        "ne",
+        "nedir",
+        "kaç",
+        "hangi",
+        "kadar",
+        "mı",
+        "mi",
+        "mu",
+        "mü",
+        "son",
+        "yıl",
+        "yılda",
+        "yılın",
+        "yıllarda",
+        "arası",
+        "arasında",
+        "değişti",
+        "değişim",
+        "oldu",
+        "göster",
+        "durumu",
+        "seyri",
+        "nedeni",
     }
 )
 
