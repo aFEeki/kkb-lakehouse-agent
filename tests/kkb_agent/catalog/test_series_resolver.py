@@ -184,3 +184,28 @@ class TestWrongAnswersItRefuses:
         r = resolve(concepts, catalog, "altın rezervleri")
         assert not r.resolved
         assert r.concept is None
+
+
+class TestFacetsDecideWhichMeasureAnswers:
+    """The highest-scoring measure is often not the one published at the grain asked for."""
+
+    def test_a_nationwide_question_is_not_answered_with_provincial_series(self, concepts, catalog):
+        """FinTürk publishes "Konut Kredisi" per province and has no nationwide row. The
+        walk has to reach past it to the BDDK measure that does, rather than serving one
+        province per row."""
+        resolution = resolve(concepts, catalog, "konut kredisi")
+        assert resolution.concept.source == "bddk_aylik"
+        assert all("finturk" not in series_id for series_id in resolution.series_ids)
+
+    def test_a_named_province_is_binding_on_the_source(self, concepts, catalog):
+        """A source that does not carry province is skipped rather than filtered - right
+        for an unstated facet, wrong for one the user named, or a nationwide series
+        answers a question about İstanbul."""
+        resolution = resolve(concepts, catalog, "İstanbul konut kredisi")
+        assert resolution.series_ids
+        assert all("İSTANBUL" in s or "istanbul" in s.casefold() for s in resolution.series_ids)
+
+    def test_an_unstated_facet_still_skips_sources_that_lack_it(self, concepts, catalog):
+        """The skip is what lets an EVDS rate answer at all - it carries no bank group."""
+        resolution = resolve(concepts, catalog, "konut kredisi faizi")
+        assert resolution.series_ids
