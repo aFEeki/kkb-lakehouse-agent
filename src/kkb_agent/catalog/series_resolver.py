@@ -148,6 +148,9 @@ def detect_currency(query: str) -> tuple[str, bool]:
     return DEFAULT_CURRENCY, False
 
 
+FACET_SEARCH_DEPTH = 30
+
+
 def resolve_series(
     concepts: list[Concept],
     query: str,
@@ -164,7 +167,11 @@ def resolve_series(
     scope is Katılım.
     """
     trace: list[str] = []
-    found = resolve_concept(concepts, query, limit=limit)
+    # Search deeper than we display. The measure that can answer at the grain asked for
+    # is often ranked below the top few: "Takipteki krediler oranı" puts eight FinTürk
+    # per-province measures above the nationwide BDDK one, so a limit of 8 finds nothing
+    # that satisfies "Türkiye geneli" and falls through to serving 567 provincial series.
+    found = resolve_concept(concepts, query, limit=max(limit, FACET_SEARCH_DEPTH))
 
     if not found.best:
         trace.append(f"'{query}' katalogdaki hiçbir ölçüme yeterince yakın değil")
@@ -201,6 +208,15 @@ def resolve_series(
         ),
         FacetChoice("currency_basis", currency, currency_stated, "para birimi"),
     )
+    stated = frozenset(
+        name
+        for name, was_stated in (
+            ("sector_scope", scope_stated),
+            ("province", province_stated),
+            ("currency_basis", currency_stated),
+        )
+        if was_stated
+    )
     for f in facets:
         trace.append(str(f))
 
@@ -214,7 +230,7 @@ def resolve_series(
     rows: list[dict] = []
     for rank, hit in enumerate(found.hits):
         candidate_rows = _rows_for(candidates, hit.concept)
-        narrowed, notes = _apply_facets(candidate_rows, scope, province, currency)
+        narrowed, notes = _apply_facets(candidate_rows, scope, province, currency, stated)
         if narrowed:
             chosen = hit.concept
             rows = narrowed
@@ -242,7 +258,7 @@ def resolve_series(
         series_ids=series_ids,
         facets=facets,
         substitution=substitution,
-        alternatives=tuple(h for h in found.hits if h.concept is not chosen),
+        alternatives=tuple(h for h in found.hits if h.concept is not chosen)[:limit],
         trace=tuple(trace),
     )
 
@@ -256,7 +272,11 @@ def _rows_for(candidates: list[dict], concept: Concept) -> list[dict]:
 
 
 def _apply_facets(
-    rows: list[dict], scope: str, province: str | None, currency: str
+    rows: list[dict],
+    scope: str,
+    province: str | None,
+    currency: str,
+    stated: frozenset[str] = frozenset(),
 ) -> tuple[list[dict], list[str]]:
     """Narrow by each facet the source actually carries.
 
@@ -276,6 +296,10 @@ def _apply_facets(
     ):
         present = {(r.get(facet) or None) for r in rows}
         if present <= {None}:
+            if facet in stated:
+                # The user named it and this source cannot express it. Skipping would let
+                # a nationwide series answer a question about İstanbul.
+                return [], [*notes, f"{facet}: bu kaynak bu kırılımı yayımlamıyor"]
             notes.append(f"{facet}: bu kaynakta yok, atlandı")
             continue
         narrowed = [r for r in rows if (r.get(facet) or None) == wanted]
