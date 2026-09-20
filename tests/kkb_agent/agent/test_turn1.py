@@ -131,7 +131,8 @@ class TestTurnOneAgainstTheCatalog:
     def test_it_answers_the_question_over_the_window_where_rates_did_fall(self, result):
         decline = next(f for f in result.frame.findings if f.finding_id == "f-decline")
         assert "nominal" in decline.statement.casefold()
-        assert "turn 2" in decline.statement.casefold()
+        # Names the adjustment the reader needs, not our internal turn numbering.
+        assert "tüfe" in decline.statement.casefold()
         assert decline.supporting_column_keys
 
     def test_the_stock_versus_flow_distinction_is_always_stated(self, result):

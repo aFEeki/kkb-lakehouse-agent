@@ -564,8 +564,9 @@ def _findings(
             statement=(
                 f"Faizin gerilediği {window} döneminde ({faiz_dec.first:.2f}% -> "
                 f"{faiz_dec.last:.2f}%, {faiz_dec.change_abs:+.2f} puan) bakiye nominal "
-                f"olarak %{nominal_dec.change_pct:+.0f} değişti. Bu Turn 1 sonucu nominal "
-                "bakiyeyi gösterir; enflasyondan arındırma Turn 2 kapsamındadır."
+                f"olarak %{nominal_dec.change_pct:+.0f} değişti. Bu rakam nominal "
+                "bakiyedir; enflasyondan arındırılmış (reel) karşılaştırma için "
+                "tutarların TÜFE ile düzeltilmesi gerekir."
             ),
             supporting_column_keys=(RATE_KEY, BALANCE_KEY),
             producing_tool="turn1.arithmetic",
