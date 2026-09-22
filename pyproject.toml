@@ -48,11 +48,11 @@ dev = [
     "pytest>=8.2",
     "pytest-cov>=5.0",
     "ruff>=0.5",
+    # Lived in a `browser` extra nothing installed, so the JS-rendered demo URL in the
+    # brief returned metadata and no values for everyone. Run `playwright install
+    # chromium` once after installing.
+    "playwright>=1.44",
 ]
-browser = [
-    "playwright>=1.44",   # JS-rendered pages; run `playwright install chromium`
-]
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

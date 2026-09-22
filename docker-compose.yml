@@ -1,0 +1,18 @@
+# Local services the app talks to. Only SearxNG for now.
+#
+# docs/web-search.md has told people to run `docker compose up -d searxng` since the tool
+# was written, and this file did not exist - so the web search tool answered
+# "kullanılamıyor" for everyone who followed the instructions.
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: kkb-searxng
+    ports:
+      - "8888:8080"
+    volumes:
+      # Carries settings.yml, which turns on the JSON API. SearxNG serves HTML only by
+      # default, and the provider calls /search?format=json.
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+    restart: unless-stopped
