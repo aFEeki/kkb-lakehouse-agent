@@ -89,7 +89,7 @@ CREATE TABLE series_catalog (
 | `statement_kind` | VARCHAR, NULL | `balance_sheet` \| `income_statement` \| `off_balance_sheet` \| `ratio`. Which financial statement the source table represents. This is the *source definition* that settles cumulative mode when the data pattern cannot. NULL for EVDS. |
 | `sector_scope` | VARCHAR | Bank-group scope (BDDK *taraf*): `Sektör`, `Mevduat`, `Katılım`, `Kalkınma ve Yatırım`, `Yerli Özel`, `Kamu`, `Yabancı`, and three `Mevduat-*` splits. One canonical spelling per scope — BDDK writes them in title case monthly and upper case in FinTürk, which once put 17 distinct values in a column holding nine scopes. |
 | `currency_basis` | VARCHAR | `TP` (lira) \| `YP` (foreign currency) \| `Toplam`. |
-| `province` | VARCHAR, NULL | **NULL means national.** 41,522 series across 82 province values, all FinTürk. National and İstanbul are different series and must never be merged. |
+| `province` | VARCHAR, NULL | **NULL means national.** 41,522 series, all FinTürk, across 82 values: Turkey's 81 provinces plus `YURT DIŞI` for foreign branches, which FinTürk publishes as a peer of the provinces. National and İstanbul are different series and must never be merged, and a filter meaning "every province" should exclude `YURT DIŞI`. |
 
 **Distribution:** stock 34,442 · ratio 11,287 · count 618 · flow 600 · rate 62 · index 6.
 
