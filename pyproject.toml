@@ -69,6 +69,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]          # tests import scripts/; bare `pytest` has no cwd on sys.path
 markers = [
     "invariant: data-correctness checks that gate the gold build",
     "network: hits a live external source",
