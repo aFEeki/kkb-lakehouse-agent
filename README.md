@@ -5,210 +5,164 @@ Türkçe sorulan bir soruyu anlar, analizi planlar, uygun araçları kendisi se�
 yürütür, sonucu doğrular ve ürettiği her sayının kaynağını gösterir.
 
 **KKB Hackathon 2026** — Lakehouse Agent Builder & Data Analytics
-**Ekip:** Fellas in Istanbul
-
----
-
-## Sistem ne yapıyor?
-
-BDDK bültenleri ve TCMB EVDS'ten oluşturulan veri havuzu üzerinde analitik soruları
-yanıtlar; kapsam Ocak 2021 – Haziran 2026'dır. Gerektiğinde canlı kaynaklarla zenginleştirir.
-
-Aşağıdaki örnek, organizasyonun paylaştığı senaryodur ve sistemin birincil kabul testi
-olarak ele alınmıştır:
-
-| Tur | Soru | Sistemin yaptığı |
-|---|---|---|
-| 1 | 2021–2025 arasında kullandırılan konut kredilerinin aylık dağılımı ve konut kredisi faiz oranları. Faizlerin düştüğü dönemlerde kredi hacmi nasıl değişti? | İki seriyi çözümler, ortak bir aylık omurgaya hizalar, grafikleştirir ve soruyu hesaplanmış kanıta dayanarak yanıtlar |
-| 2 | *Tabloyu bozmadan*, sadece konut kredisi tutarlarını enflasyondan arındırabilir misin? | Bir fiyat endeksi getirir, yalnızca ilgili sütuna uygular; satırlara ve diğer sütunlara dokunmaz |
-| 3 | *Bu tabloyu hiç bozmadan*, konut fiyat endeksini yeni sütun olarak ekle. Kredilerin artmamasının nedeni fiyat artışları olabilir mi? | Dördüncü seriyi aynı satırlara ekler ve önceki turdaki kendi bulgusunu yeniden değerlendirir |
-
-Sistem, bir sohbet boyunca tek bir canlı analiz nesnesi taşır ve onu yerinde değiştirir. Her
-turda sonucu sıfırdan yeniden üretmez — bkz. [Tasarım kararları](#tasarım-kararları).
-
----
-
-## Mimari
-
-Şartnamede tanımlanan beş aşama ve hepsinin altında çalışan güven katmanı.
-
-| Aşama | Uygulama | Modül |
-|---|---|---|
-| **1 · Veri Keşfi & Temini** | BDDK bültenleri ve EVDS serilerinin taranması ve arşivlenmesi. Ham veri, ayrıştırılmadan önce SHA-256 özeti ve çekim zaman damgasıyla saklanır | `ingest/`, `data/bronze/` |
-| **2 · Veri Temizliği & Hizalama** | Kalite ve eksik veri kontrolleri, kümülatif ayrıştırma, birim normalizasyonu, frekans hizalama. Çıktı, her serinin her seriyle birleştirilebildiği tek bir havuzdur | `transform/`, `catalog/`, `data/gold/` |
-| **3 · Agentic Analytics Motoru** | Türkçe soru anlama, anlamsal ve sözcüksel aramanın birlikte kullanıldığı seri çözümleme, araç seçimi, analiz nesnesi üzerinde çok adımlı yürütme | `agent/`, `tools/lakehouse.py` |
-| **4 · Verinin Analiz Edilmesi** | Anomali tespiti, kırılma noktası tespiti ve kırılmaları dikkate alan nedensellik testleri | `tools/anomaly.py`, `tools/change_detection.py`, `tools/causality/` |
-| **5 · Doğrulama & Sonuç** | Web araması ve doğrudan URL okuma ile teyit; çıktının grafik, tablo veya rapor olarak sunulması | `tools/web_search.py`, `tools/web_url.py`, `api/` |
-
-### Güven Katmanı
-
-İzlenebilirlik, yanıtın sonuna eklenen bir not değil, veri yapısının bir özelliğidir. Her
-sonuçtaki her sütun bir **köken kaydı** taşır: kaynak türü, tam kaynak referansı (EVDS seri
-kodu ya da çalışma kitabı, sayfa ve hücre aralığı), çekim zamanı, ayrıştırıldığı ham verinin
-SHA-256 özeti ve uygulanan dönüşümlerin sıralı zinciri. Türetilmiş sütunlar, kendilerini
-oluşturan sütunların köken kayıtlarını da özyinelemeli olarak taşır.
-
-Arayüz bu bilgiyi sütun bazında gösterir. "Bu sayı nereden geliyor?" sorusu, sayfanın altındaki
-bir kaynak listesine bakılarak değil, sütuna tıklanarak yanıtlanır.
-
-Doğruluk kontrolü, veri derlemesini kapıda tutan bir **doğrulama kuralları** kümesiyle
-sağlanır. Başarısız bir kural uyarı üretmez, derlemeyi durdurur. Kurallar
-[`docs/invariants.md`](docs/) içinde belgelenmiştir.
-
----
-
-## Ajan Araçları
-
-| Araç | Yetenek |
-|---|---|
-| **Lakehouse** | Hazırlanan veri havuzu üzerinde doğal dille keşif, sorgulama ve birleştirme |
-| **Web Search** | Dış kaynaklardan araştırma ve teyit |
-| **Web URL Agent** | Verilen bir URL'yi okuyup anlam çıkarır — PDF, Excel, görsel ve metin; sayfanın kendisinde değil, sayfadan bağlantılanan belgelerde duran veriler dâhil |
-| **Anomaly** | Olağandışı hareketler, aykırı değerler ve beklenen davranıştan sapmalar |
-| **Causality** | Gözlenen ilişkinin gerçekten neden-sonuç mu, yoksa yalnızca korelasyon mu olduğu |
-| **Change Detection** | Zaman serisinde seviye, eğilim ve davranış değişiklikleri |
-
-Planlayıcı her soruyu ihtiyaç duyduğu araçlara yönlendirir ve yanıtta bu araçlara atıf yapar.
-Araç seçimi gizli değildir; yürütme izinde görünür.
-
----
-
-## Tasarım kararları
-
-Diğer her şeyi belirleyen iki karar var ve ikisi de bilinçli.
-
-### Analiz nesnesinin tarih omurgası değiştirilemez
-
-Bir sorunun sonucu, kalıcı ve sürümlenen bir nesnedir: sabit bir tarih omurgası, her biri
-kendi köken kaydını taşıyan tipli sütunlar, bulgular ve bir grafik tanımı. Planlayıcı bu nesne
-üzerinde kapalı bir işlem sözlüğünden operasyonlar üretir; nesneyi baştan oluşturmaz ve
-aritmetik yapmaz.
-
-Sütun ekleyen her işlem mevcut omurga üzerine sol birleştirme (left join) yapar ve satır
-sayısının değişmediğini doğrular. Omurganın yeniden dilimlenmesi, kullanıcının açık onayını
-gerektiren ayrı bir işlemdir. "Tabloyu bozmadan" ifadesi böylece sistemin ummakla yetindiği
-bir davranış değil, güvence altına aldığı bir kural hâline gelir: iç birleştirmeye ya da
-tarih aralığını değiştirmeye karar veren bir planlayıcı bunu sessizce yapamaz.
-
-Aynı işlem günlüğü sisteme çalışan bir geri alma yeteneği kazandırır; hatalı bir adım, önceki
-turlar kaybedilmeden geri alınabilir.
-
-### Kümülatif veriler seri bazında sınıflandırılır ve bir kişi tarafından doğrulanır
-
-BDDK bazı verileri yıl başından itibaren biriken, bazılarını yayın başlangıcından itibaren
-biriken toplamlar olarak yayımlar; bunların yanında olağan dönem değerleri de yer alır. Üçü
-bir grafikte birbirinden ayırt edilemez ve birinin yanlış sınıflandırılması, o seriden
-türetilen bütün dönemsel değişim hesaplarını bozar.
-
-Akla ilk gelen yöntem burada işe yaramaz. "Sürekli artıyorsa kümülatiftir" varsayımı, bu
-dönemdeki TL serileri için neredeyse hiçbir bilgi taşımaz; enflasyon zirvede %85'e ulaştığı
-için nominal değerler ne ölçerse ölçsün hemen her ay artmıştır. Ayırt edici olan **Ocak
-kırılmasıdır**. Sınıflandırma bu teste dayanır, gerekçesiyle birlikte katalogda kayıt altına
-alınır ve seri gold katmanına geçmeden önce bir kişi tarafından onaylanır. Doğrulanamayan
-seri yayımlanmaz, kapsam dışı bırakılır.
-
-Her seri ayrıca açık bir toplulaştırma kuralı taşır; çünkü kümülatif ayrıştırma ile frekans
-dönüşümü birbirine bağlıdır: ayrıştırılmış haftalık bir akım aya toplanarak, bir stok ise
-dönem sonu değeri alınarak dönüştürülür.
-
----
-
-## Veri kaynakları
-
-| Kaynak | Kapsam | Not |
-|---|---|---|
-| **BDDK** — Haftalık Bülten, Aylık Bülten, FinTürk | 2021-01 → 2026-06 | Excel bültenler; çok satırlı başlıklar, karışık birimler, kümülatif ve kümülatif olmayan seriler |
-| **TCMB EVDS** | 2021-01 → 2026-06 | Günlük, haftalık ve aylık seriler; dokümante API üzerinden |
-| **Canlı URL'ler** | Talep üzerine | Sorgu anında verilir ve doğrudan okunur |
-
-Seriler, sonuçların yeniden üretilebilmesi için tarihli bir anlık görüntüye sabitlenir. Her iki
-kaynak da geçmiş verilerde revizyon yaptığından, anlık görüntü tarihi arayüzde gösterilir.
-
----
-
-## Teknoloji
-
-Arka uç ve agentic katmanın tamamı, yarışma kurallarına uygun olarak Python ile geliştirilmiştir.
-Yalnızca açık kaynak kütüphaneler kullanılmıştır.
-
-| Alan | Tercih |
-|---|---|
-| Çıkarım | Kloudeks MIA — `Qwen3.8-27B` (akıl yürütme, görsel), `Qwen3-Embedding-8B` (arama), `Unlimited-OCR` (belge) |
-| Analitik veri deposu | DuckDB |
-| Vektör deposu | LanceDB |
-| Veri işleme | Pandas |
-| Belgeler | pypdf, pypdfium2, openpyxl |
-| İstatistik | statsmodels, ruptures, SciPy |
-| Grafik | Plotly |
-| API | FastAPI |
-| Arayüz | Next.js |
-
-Çalışma zamanında hiçbir üçüncü parti LLM servisi kullanılmaz. Tüm çıkarım Kloudeks platformu
-üzerinden yapılır ve API anahtarı yalnızca sunucu tarafında tutulur; arayüz model uç noktasına
-değil, kendi API'mize istek atar.
-
-Kullanılan tüm teknolojiler, kullanım amaçları ve lisanslarıyla birlikte
-[STACK.md](STACK.md) içinde listelenmiştir (İngilizce).
-
----
-
-## Depo yapısı
-
-```
-src/kkb_agent/
-  llm/          Kloudeks MIA istemcisi — tek çıkarım sağlayıcısı
-  frame/        Analiz nesnesi: omurga, sütunlar, köken kaydı, işlemler
-  ingest/       BDDK ve EVDS verilerinin bronze katmana alınması
-  catalog/      Seri metaverisi — birim, kümülatif mod, toplulaştırma kuralı, semantik
-  transform/    Kümülatif ayrıştırma, birim normalizasyonu, frekans hizalama
-  tools/        Altı ajan aracı
-  agent/        Planlayıcı ve yürütme döngüsü
-  api/          FastAPI arka ucu
-
-web/            Next.js arayüzü
-tests/          Veri derlemesini kapıda tutan doğrulama kuralları
-scripts/        Veri alma işleri ve platform yetenek testleri
-eval/           Regresyon için sabitlenmiş Türkçe soru kümesi
-docs/           Mimari, veritabanı tanımları, model yetenek raporu
-data/           Yerel veri gölü (git dışı) — bronze → silver → gold
-```
+**Takım:** Fellas in Istanbul
 
 ---
 
 ## Çalıştırma
 
-**Mevcut durum:** Yerel geliştirme temeli, `/health` API'si ve sağlık ekranı hazırdır.
-Kurulum ve çalışan komutlar için [yerel geliştirme rehberine](docs/local-development.md)
-bakın. Aşağıdaki lakehouse oluşturma akışı hedef kullanımdır; veri derleme script'i
-ve invariant testleri henüz uygulanmamıştır.
+Gereken: Python 3.11+, Node 20+, Docker, [uv](https://docs.astral.sh/uv/).
+
+### 1. Kurulum
 
 ```bash
-cp .env.example .env          # MIA_API_KEY, EVDS_API_KEY
+git clone <repo> && cd kkb-lakehouse-agent
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
-
-python scripts/build_lakehouse.py    # temin → ayrıştırma → hizalama → doğrulama
-pytest -m invariant                  # veri doğruluğu kapısı
-uvicorn kkb_agent.api.main:app --reload
+python -m playwright install chromium      # JS ile üretilen sayfaları okumak için
 ```
 
-Canlı ortam: *(adres eklenecek)*
+### 2. Anahtarlar
+
+```bash
+cp .env.example .env
+```
+
+`.env` içinde `MIA_API_KEY` doldurulmalıdır. Anahtar yoksa sistem çalışmaya devam eder:
+model planlaması yerine yazılı plan, araç seçimi için de anahtar kelime kuralları devreye
+girer. Yanıtta `Plan: script` ifadesi hangi yolun çalıştığını söyler.
+
+### 3. Veri
+
+Veri deposu git'e dahil değildir (~70 MB). Yayınlanan anlık görüntüyü indirin:
+
+```bash
+gh release download data-2026-09-15
+tar xzf kkb-data-snapshot-*.tgz && rm kkb-data-snapshot-*.tgz
+```
+
+Doğrulama — beklenen çıktı `47015 / 1330275 / 325ca5b2cfd660b5`:
+
+```bash
+python -c "
+import duckdb, hashlib
+c = duckdb.connect('data/gold/lakehouse.duckdb', read_only=True)
+rows = c.execute('select series_id, observations, nonzero_observations from series_catalog order by series_id').fetchall()
+print(len(rows), c.execute('select count(*) from series_observations').fetchone()[0],
+      hashlib.sha256(repr(rows).encode()).hexdigest()[:16])
+"
+```
+
+Alternatif olarak bronze katmandan yeniden üretilebilir (~8 dakika, ağ gerektirmez):
+`python scripts/build_catalog.py`
+
+### 4. Web arama servisi
+
+```bash
+docker compose up -d searxng
+docker ps
+```
+
+Çalışmıyorsa web arama aracı "kullanılamıyor" yanıtı verir; diğer araçlar etkilenmez.
+
+### 5. Çalıştır
+
+```bash
+# terminal 1 — backend
+uvicorn kkb_agent.api.main:app --reload --host 127.0.0.1 --port 8000
+
+# terminal 2 — arayüz
+cd web && npm ci
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000 npm run dev
+```
+
+<http://localhost:3000> adresini açın ve soruyu yazın.
+
+### Örnek sorular
+
+Yayınlanan senaryo — sırayla, aynı sohbette:
+
+```
+Konut kredisi faizleri düştüğü halde kredi hacmi neden artmadı?
+Tabloyu bozmadan, sadece konut kredisi tutarlarını enflasyondan arındırabilir misin?
+Bu tabloyu hiç bozmadan, konut fiyat endeksini yeni sütun olarak ekle.
+```
+
+Serbest sorular ve araçlar:
+
+```
+Ticari kredilerin 2021-2025 seyrini göster            → lakehouse
+Konut kredisi bakiyesinde aykırı değer var mı?        → anomali
+Mevduatta yapısal kırılma nerede?                     → değişim tespiti
+Konut kredisi ile konut fiyat endeksi arasında nedensellik var mı?  → nedensellik
+https://www.borsaistanbul.com/dosyalar/kmtp/veriler/kmp_au.pdf oku  → URL ajanı
+BDDK konut kredisi düzenlemeleri hakkında internette ara            → web arama
+```
+
+Verimizle ilgisi olmayan sorular yanıtlanmaz, reddedilir.
+
+### Testler
+
+```bash
+pytest -q                 # 874 test
+pytest -m invariant       # veri doğruluğu kapısı
+ruff check src tests scripts
+```
 
 ---
 
-## Durum
+## Sistem ne yapıyor?
 
-20 Eylül teslimine yönelik geliştirme sürüyor. Yol haritası için [PLAN.md](PLAN.md).
-Bu bölüm, bileşenler tamamlandıkça güncellenir.
+Soru → seri çözümleme → model planı → doğrulanmış işlem yürütme → hesaplanmış bulgular →
+kaynaklı yanıt. İş bölümü sistemin tamamına hâkimdir:
+
+| | karar verir |
+|---|---|
+| **Model** | *ne* yapılacağına — hangi seri, hangi araç, hangi işlem |
+| **Kod** | bunun *geçerli olup olmadığına* — şema, sözlük, değişmezler |
+| **Kod** | *aritmetiğe* — hiçbir sayı model tarafından üretilmez |
+
+Beş aşama (`/ask` üzerinden SSE ile canlı yayınlanır): veri keşfi, veri hazırlığı, agentic
+analitik, analiz, doğrulama.
+
+**Araçlar:** Lakehouse, Web Search, Web URL Agent, Anomali, Causality, Change Detection.
+Soruyu hangi aracın yanıtlayacağına model karar verir; eşleşme yoksa soru reddedilir.
+
+**Güven katmanı:** her sütun kaynağına kadar izlenebilir, her sayı kod tarafından
+hesaplanır, birimi veya birikim kipi çözülemeyen seri sunulmaz.
 
 ---
 
-## Ekip
+## Veri
 
-Fellas in Istanbul — *(üyeler eklenecek)*
+| Kaynak | Seri | Kapsam |
+|---|---|---|
+| BDDK FinTürk — İllere Göre | 41.522 | 2021-03 → 2026-06, 82 il |
+| BDDK Aylık Bülten | 4.960 | 2021-01 → 2026-06 |
+| BDDK Haftalık Bülten | 283 | 2021-01 → 2026-06 |
+| TCMB EVDS | 250 | 2021-01 → 2026-06 |
+
+Toplam 47.015 seri, 1.330.275 gözlem. Anlık görüntü sabittir, böylece sonuçlar yeniden
+üretilebilir. Sütun bazında ayrıntı: [docs/database-definitions.md](docs/database-definitions.md).
+
+Derleme yedi değişmezle kapılıdır — de-kümülasyon kapanışı, işaret ve sınıflandırma
+tutarlılığı, FinTürk birimleri, banka grubu bölüntüleri, sessiz doldurma yasağı, tazelik.
+İhlalde yeni anlık görüntü yayınlanmaz. Hepsi CI'da her push'ta çalışır.
+
+---
+
+## Teknoloji
+
+Python 3.11+, FastAPI, DuckDB, pandas, Plotly, pypdf, Playwright, pytest, ruff.
+Arayüz Next.js. Dil modeli yalnızca MIA / Kloudeks üzerinden (`Qwen3`); üçüncü taraf LLM
+API'si kullanılmaz.
+
+Ayrıntılı geliştirme notları: [docs/local-development.md](docs/local-development.md).
+
+---
 
 ## Depo kuralları
 
-Yerel ayarlar, gizli anahtarlar ve veri gölü git dışındadır; her commit öncesi `git status`
-kontrol edilmelidir. MIA anahtarı yalnızca ortam değişkeninde tutulur ve hiçbir koşulda
-arayüz koduna, bir commit'e veya ekran görüntüsüne girmemelidir.
+Yerel ayarlar, gizli anahtarlar ve veri gölü git dışındadır; her commit öncesi
+`git status` kontrol edilir. MIA anahtarı yalnızca ortam değişkeninde tutulur ve hiçbir
+koşulda arayüz koduna, bir commit'e veya ekran görüntüsüne girmez.
