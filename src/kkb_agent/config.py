@@ -1,8 +1,9 @@
 """Environment configuration; constructing settings never contacts a service."""
 
 from pathlib import Path
+from typing import Literal
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,11 +19,19 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     duckdb_path: Path | None = None
     lancedb_path: Path | None = None
+    vector_retrieval_enabled: bool = False
+    vector_retrieval_mode: Literal["off", "selective", "always"] | None = None
+    vector_top_k: int = Field(default=20, ge=1, le=100)
     # 127.0.0.1, not localhost: Docker publishes the container on IPv4 only, and Python
     # resolves "localhost" to ::1 first, where nothing is listening. curl happens to
     # prefer IPv4 and works, which is why the tool looked broken only from the app.
     searxng_url: str = "http://127.0.0.1:8888"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+    @property
+    def effective_vector_mode(self) -> str:
+        # Explicit mode wins; legacy true retains experimental always behavior.
+        return self.vector_retrieval_mode or ("always" if self.vector_retrieval_enabled else "off")
 
     @model_validator(mode="after")
     def resolve_storage_paths(self) -> "Settings":

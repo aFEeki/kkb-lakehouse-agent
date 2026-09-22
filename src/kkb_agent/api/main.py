@@ -27,10 +27,13 @@ from kkb_agent.api.contracts import (
 from kkb_agent.api.runner import AskRunner, UnavailableAskRunner
 from kkb_agent.api.turn1_runner import TurnOneAskRunner
 from kkb_agent.catalog.duckdb_store import DuckDBStore
+from kkb_agent.catalog.hybrid import HybridRetrieval
 from kkb_agent.catalog.lance_store import LanceStore
 from kkb_agent.catalog.series_source import CATALOG_COLUMNS as SERIES_SOURCE_COLUMNS
+from kkb_agent.catalog.vector_index import SemanticIndex, catalog_rows
 from kkb_agent.config import Settings
 from kkb_agent.llm.client import MIAClient
+from kkb_agent.llm.embeddings import MIAEmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -88,13 +91,29 @@ def create_app(
         components = {"application": "ok"}
         for name, store in application.state.stores.items():
             try:
-                components[name] = "ok" if store.check() else "error"
+                available = store.check()
+                if name == "duckdb":
+                    available = available and _turn1_catalog_ready(store.path)
+                components[name] = "ok" if available else "error"
             except Exception:
                 logger.exception("Local readiness check failed: %s", name)
                 components[name] = "error"
-        ready = all(value == "ok" for value in components.values())
+        ready = components["application"] == "ok" and components["duckdb"] == "ok"
+        try:
+            semantic_status = SemanticIndex(
+                config.lancedb_path, MIAEmbeddingProvider(MIAClient(config))
+            ).readiness(catalog_rows(config.duckdb_path))
+        except Exception:
+            semantic_status = "unavailable"
         return JSONResponse(
-            {"status": "ok" if ready else "degraded", "components": components},
+            {
+                "status": "ok" if ready else "degraded",
+                "components": components,
+                "semantic_index": {
+                    "status": semantic_status,
+                    "enabled": config.effective_vector_mode != "off",
+                },
+            },
             status_code=200 if ready else 503,
         )
 
@@ -120,7 +139,14 @@ def _default_runner(config: Settings) -> AskRunner:
     if not _turn1_catalog_ready(catalog):
         logger.warning("Turn 1 catalog is not ready; /ask will report unavailable")
         return UnavailableAskRunner()
-    return TurnOneAskRunner(catalog, planner=_planner_for(config))
+    retrieval = HybridRetrieval(
+        SemanticIndex(config.lancedb_path, MIAEmbeddingProvider(MIAClient(config)))
+        if config.effective_vector_mode != "off"
+        else None,
+        top_k=config.vector_top_k,
+        mode=config.effective_vector_mode,
+    )
+    return TurnOneAskRunner(catalog, planner=_planner_for(config), retrieval=retrieval)
 
 
 def _planner_for(config: Settings) -> OperationPlanner | None:

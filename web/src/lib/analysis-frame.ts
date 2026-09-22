@@ -5,7 +5,13 @@ export type AnalysisUnit = {
   scale: number;
 };
 
+export type AnalysisLineage = {
+  sources: { source_type: string; reference: string; raw_sha256?: string | null }[];
+  parents: { column_key: string; lineage: AnalysisLineage }[];
+};
+
 export type AnalysisColumn = {
+  lineage?: AnalysisLineage;
   key: string;
   label: string;
   values: readonly AnalysisCell[];

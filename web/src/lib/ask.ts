@@ -26,6 +26,12 @@ export type ToolName =
   | "causality"
   | "change_detection";
 
+export type InformationalResult = {
+  tool: ToolName;
+  evidence: { title: string; url: string; snippet?: string | null }[];
+  caveats: string[];
+};
+
 export type Outcome = "succeeded" | "failed";
 
 type Envelope = {
@@ -40,7 +46,7 @@ export type AskEvent =
   | (Envelope & { type: "stage_start"; payload: { stage: StageName } })
   | (Envelope & { type: "stage_end"; payload: { stage: StageName; outcome: Outcome } })
   | (Envelope & { type: "tool_selected"; payload: { tool: ToolName } })
-  | (Envelope & { type: "result"; payload: { frame: ResultFrame; answer: string } })
+  | (Envelope & { type: "result"; payload: { frame?: ResultFrame | null; answer: string; information?: InformationalResult | null } })
   | (Envelope & {
       type: "error";
       payload: { code: string; user_message: string; retryable: boolean };

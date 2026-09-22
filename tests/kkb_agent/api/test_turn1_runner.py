@@ -137,10 +137,10 @@ def test_an_unrelated_initial_question_is_refused():
     import asyncio
 
     events = asyncio.run(collect(TurnOneAskRunner(GOLD), question="Mevduat faizleri nedir?"))
-    assert [event.type for event in events] == ["error", "completion"]
+    assert [event.type for event in events] == ["stage_start", "stage_end", "error", "completion"]
     # The refusal now comes from the router, which considered the question and found no
     # tool for it, rather than from "this is not a published turn".
-    assert events[0].payload.code == "TOOL_REFUSED"
+    assert next(e for e in events if e.type == "error").payload.code == "TOOL_REFUSED"
 
 
 class TestAppWiring:
@@ -379,8 +379,13 @@ def test_real_three_request_api_flow_uses_one_store(tmp_path):
                 },
             )
         )
-        assert [event.type for event in unrelated] == ["error", "completion"]
-        assert unrelated[0].payload.code == "TOOL_REFUSED"
+        assert [event.type for event in unrelated] == [
+            "stage_start",
+            "stage_end",
+            "error",
+            "completion",
+        ]
+        assert next(e for e in unrelated if e.type == "error").payload.code == "TOOL_REFUSED"
         assert unrelated[-1].frame_version == frame1.version
         second = _parse_sse(
             client.post(
@@ -435,8 +440,8 @@ class TestNonPublishedQuestionsReachTheRouter:
 
     def test_an_unroutable_question_still_refuses(self):
         events = self._events("Bugün hava nasıl?")
-        assert [e.type for e in events] == ["error", "completion"]
-        assert events[0].payload.code == "TOOL_REFUSED"
+        assert [e.type for e in events] == ["stage_start", "stage_end", "error", "completion"]
+        assert next(e for e in events if e.type == "error").payload.code == "TOOL_REFUSED"
 
     def test_the_published_turn_is_untouched(self):
         events = self._events(QUESTION)
@@ -457,9 +462,10 @@ class TestNonPublishedQuestionsReachTheRouter:
 
         started = [event.payload.stage for event in events if event.type == "stage_start"]
         assert started == ["agentic_analytics", "verification"]
-        assert events[-2].payload.code == "TOOL_RUN_NOT_RENDERABLE"
-        assert "TCMB duyurusu" in events[-2].payload.user_message
-        assert "https://www.tcmb.gov.tr/duyuru" in events[-2].payload.user_message
+        assert events[-2].type == "result"
+        assert events[-1].payload.outcome == "succeeded"
+        assert "TCMB duyurusu" in events[-2].payload.answer
+        assert "https://www.tcmb.gov.tr/duyuru" in events[-2].payload.answer
         assert events[-1].type == "completion"
 
     def test_web_search_failure_is_a_safe_refusal(self):

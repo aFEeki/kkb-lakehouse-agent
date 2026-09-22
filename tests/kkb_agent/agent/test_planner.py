@@ -270,7 +270,7 @@ def test_versions_are_assigned_contiguously_from_the_current_version():
 def test_provider_failure_is_explicit_and_not_retried():
     client = FakeMIAClient([RuntimeError("offline")])
 
-    with pytest.raises(PlannerModelError, match="offline"):
+    with pytest.raises(PlannerModelError, match="^MIA operation planning call failed$"):
         OperationPlanner(client).plan("Index loans", "column_key=loans", 0)
 
     assert len(client.completions.calls) == 1

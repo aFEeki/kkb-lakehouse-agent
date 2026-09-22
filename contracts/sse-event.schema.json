@@ -462,6 +462,37 @@
       "title": "ErrorPayload",
       "type": "object"
     },
+    "EvidenceItem": {
+      "additionalProperties": false,
+      "properties": {
+        "snippet": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snippet"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "url"
+      ],
+      "title": "EvidenceItem",
+      "type": "object"
+    },
     "Finding": {
       "additionalProperties": false,
       "properties": {
@@ -587,6 +618,44 @@
         "base_date"
       ],
       "title": "IndexColumnParameters",
+      "type": "object"
+    },
+    "InformationalResult": {
+      "additionalProperties": false,
+      "properties": {
+        "caveats": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Caveats",
+          "type": "array"
+        },
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceItem"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "tool": {
+          "enum": [
+            "lakehouse",
+            "web_search",
+            "web_url",
+            "anomaly",
+            "causality",
+            "change_detection"
+          ],
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool"
+      ],
+      "title": "InformationalResult",
       "type": "object"
     },
     "Lineage": {
@@ -810,7 +879,7 @@
     },
     "ResultPayload": {
       "additionalProperties": false,
-      "description": "A self-contained, validated snapshot plus its evidence-bounded answer.",
+      "description": "Exactly one analytical snapshot or provider-neutral informational result.",
       "properties": {
         "answer": {
           "minLength": 1,
@@ -818,11 +887,29 @@
           "type": "string"
         },
         "frame": {
-          "$ref": "#/$defs/AnalysisFrame"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnalysisFrame"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "information": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InformationalResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
-        "frame",
         "answer"
       ],
       "title": "ResultPayload",

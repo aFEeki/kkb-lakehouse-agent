@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+from openai import APITimeoutError
 
 # The brief's six names.
 TOOLS = (
@@ -83,7 +85,7 @@ class ToolChoice:
 
     tool: str | None
     reason: str
-    chosen_by: str  # "planner" | "rules"
+    chosen_by: str  # planner, rules, model_timeout_fallback, model_error_fallback
 
     @property
     def routable(self) -> bool:
@@ -144,10 +146,39 @@ def rule_choice(question: str) -> ToolChoice:
     return ToolChoice(None, "hiçbir araç bu soruyla eşleşmedi", "rules")
 
 
+def explicit_choice(question: str) -> ToolChoice | None:
+    """Existing unambiguous tool cues only; conflicting specialist cues still ask MIA."""
+    text = question.casefold()
+    if _URL.search(question):
+        return rule_choice(question)
+    specialists = [
+        tool
+        for tool, cues in _CUES.items()
+        if tool != "lakehouse" and any(cue in text for cue in cues)
+    ]
+    if len(specialists) == 1:
+        tool = specialists[0]
+        return ToolChoice(tool, "açık araç isteği", "rules")
+    if specialists:
+        return None
+    choice = rule_choice(question)
+    # A display verb alone is not a financial intent (e.g. "hava durumunu göster").
+    # Keep model routing for these; do not use a loose catalog match as intent evidence.
+    if choice.tool == "lakehouse" and any(
+        term in text for term in ("kredi", "mevduat", "faiz", "konut", "tüfe", "sermaye")
+    ):
+        return choice
+    return None
+
+
 def select_tool(question: str, *, planner=None, mia_client=None) -> ToolChoice:
-    """Ask the model which tool to run; fall back to the keyword rules."""
+    """Explicit supported intent first; model-assisted routing remains for ambiguity."""
     if not question.strip():
         raise ValueError("question must not be empty")
+
+    explicit = explicit_choice(question)
+    if explicit is not None:
+        return explicit
 
     client = mia_client if mia_client is not None else getattr(planner, "_mia_client", None)
     if client is None:
@@ -172,8 +203,10 @@ def select_tool(question: str, *, planner=None, mia_client=None) -> ToolChoice:
             },
         )
         payload = json.loads(response.choices[0].message.content or "{}")
+    except APITimeoutError:
+        return replace(rule_choice(question), chosen_by="model_timeout_fallback")
     except Exception:
-        return rule_choice(question)  # weaker; chosen_by keeps that visible
+        return replace(rule_choice(question), chosen_by="model_error_fallback")
 
     tool = payload.get("tool")
     if tool is not None and tool not in TOOLS:
@@ -301,6 +334,7 @@ def run_tool(
     choice=None,
     planner=None,
     frame_id: str = "analysis",
+    retrieval=None,
 ) -> ToolRun:
     """Choose a tool, give it what it needs, run it.
 
@@ -327,16 +361,26 @@ def run_tool(
     from kkb_agent.catalog.series_source import CatalogSeriesSource
 
     if choice.tool == "lakehouse":
-        # The full generic path: resolve, let the model plan operations, compute findings.
-        from kkb_agent.agent.analyze import NothingToAnalyse, analyze
+        # This bounded source-only path already fixes the operations after resolution.
+        # Do not ask MIA to re-emit the same add_column sequence. analyze(planner=...)
+        # and OperationPlanner remain available to model-assisted callers.
+        from kkb_agent.agent.analyze import AmbiguousSeries, NothingToAnalyse, analyze
+        from kkb_agent.agent.date_window import DateWindowError
 
         try:
             return ToolRun(
                 choice,
-                result=analyze(question, catalog, planner=planner, frame_id=frame_id),
+                result=analyze(
+                    question, catalog, planner=None, frame_id=frame_id, retrieval=retrieval
+                ),
             )
+        except AmbiguousSeries as exc:
+            return ToolRun(choice, refusal=str(exc))
         except NothingToAnalyse:
             return ToolRun(choice, refusal="Soru kataloğumuzdaki bir seriye çözümlenemedi.")
+
+        except DateWindowError as exc:
+            return ToolRun(choice, refusal=str(exc))
 
     wanted = 2 if choice.tool == "causality" else 1
     series_ids = _resolve_pair(catalog, question) if wanted == 2 else _resolve(catalog, question, 1)
@@ -360,8 +404,8 @@ def run_tool(
 
     try:
         return ToolRun(choice, series_ids, result=_call(choice.tool, loaded))
-    except Exception as exc:  # a tool's own refusal or a genuine input problem
-        return ToolRun(choice, series_ids, refusal=f"Araç bu veriyle çalışamadı: {exc}")
+    except Exception:  # a tool's own refusal or a genuine input problem
+        return ToolRun(choice, series_ids, refusal="Araç bu veriyle çalışamadı.")
 
 
 def _call(tool: str, loaded):
@@ -411,8 +455,8 @@ def _run_url_agent(question: str, choice: ToolChoice, fetcher) -> ToolRun:
     client = SafeURLFetcher() if owned else fetcher
     try:
         return ToolRun(choice, result=create_content_type_router().route(client.fetch(url)))
-    except Exception as exc:
-        return ToolRun(choice, refusal=f"URL okunamadı: {exc}")
+    except Exception:
+        return ToolRun(choice, refusal="URL okunamadı; kaynak erişimi veya belge işleme başarısız.")
     finally:
         if owned:
             client.close()

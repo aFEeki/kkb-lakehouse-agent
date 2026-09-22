@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from kkb_agent.catalog.retrieval import Concept, Hit, tokenize
+from kkb_agent.catalog.retrieval import Concept, Hit, Resolution, detect_intent, tokenize
 from kkb_agent.catalog.retrieval import resolve as resolve_concept
 
 # Defaults for a facet the question does not name. Each is the broadest reading, which is
@@ -158,6 +158,8 @@ def resolve_series(
     candidates: list[dict],
     provinces: frozenset[str] = frozenset(),
     limit: int = 5,
+    ranked_hits: tuple[Hit, ...] | None = None,
+    strict: bool = False,
 ) -> SeriesResolution:
     """Resolve a question to series ids.
 
@@ -172,6 +174,9 @@ def resolve_series(
     # per-province measures above the nationwide BDDK one, so a limit of 8 finds nothing
     # that satisfies "Türkiye geneli" and falls through to serving 567 provincial series.
     found = resolve_concept(concepts, query, limit=max(limit, FACET_SEARCH_DEPTH))
+
+    if ranked_hits is not None:
+        found = Resolution(ranked_hits, detect_intent(query), True)
 
     if not found.best:
         trace.append(f"'{query}' katalogdaki hiçbir ölçüme yeterince yakın değil")
@@ -230,6 +235,8 @@ def resolve_series(
     rows: list[dict] = []
     for rank, hit in enumerate(found.hits):
         candidate_rows = _rows_for(candidates, hit.concept)
+        if strict:
+            candidate_rows = _explicit_constraints(candidate_rows, query)
         narrowed, notes = _apply_facets(candidate_rows, scope, province, currency, stated)
         if narrowed:
             chosen = hit.concept
@@ -241,6 +248,15 @@ def resolve_series(
                 )
             trace.extend(notes)
             break
+
+    if chosen is None and strict:
+        return SeriesResolution(
+            query=query,
+            concept=None,
+            series_ids=(),
+            facets=facets,
+            trace=(*trace, "explicit_metadata_constraints_unsatisfied"),
+        )
 
     if chosen is None:
         # Nothing satisfies every facet. Serve the best measure unfiltered rather than
@@ -308,3 +324,35 @@ def _apply_facets(
         rows = narrowed
         notes.append(f"{facet}={wanted or 'Türkiye geneli'} -> {len(rows)} seri")
     return rows, notes
+
+
+def _explicit_constraints(rows: list[dict], query: str) -> list[dict]:
+    """Additional explicit row constraints for semantic candidates; no soft penalties."""
+    intent = detect_intent(query)
+    tokens = set(tokenize(query))
+    frequencies = {
+        "aylık": "M",
+        "haftalık": "W",
+        "günlük": "D",
+        "yıllık": "A",
+        "çeyreklik": "Q",
+    }
+    wanted_freq = {value for cue, value in frequencies.items() if cue in tokens}
+    sources = {cue for cue in ("bddk", "evds", "tcmb") if cue in tokens}
+    exact_ids = {
+        r["series_id"] for r in rows if r["series_id"].casefold() in query.casefold().split()
+    }
+    return [
+        r
+        for r in rows
+        if (not intent or r.get("measure_type") in intent.measure_types)
+        and (not wanted_freq or r.get("native_freq") in wanted_freq)
+        and (
+            not sources
+            or any(
+                str(r.get("source", "")).lower().startswith("evds" if cue == "tcmb" else cue)
+                for cue in sources
+            )
+        )
+        and (not exact_ids or r["series_id"] in exact_ids)
+    ]

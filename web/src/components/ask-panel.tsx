@@ -6,7 +6,7 @@ import { AnalysisChart } from "@/components/analysis-chart";
 import { AnalysisTable } from "@/components/analysis-table";
 import { Answer } from "@/components/answer";
 import { StagePipeline, type StageState } from "@/components/stage-pipeline";
-import { STAGE_LABELS, type AskEvent, type ResultFrame, askStream } from "@/lib/ask";
+import { STAGE_LABELS, type AskEvent, type InformationalResult, type ResultFrame, askStream } from "@/lib/ask";
 
 type Turn = {
   id: string;
@@ -14,6 +14,7 @@ type Turn = {
   stages: StageState[];
   answer?: string;
   frame?: ResultFrame;
+  information?: InformationalResult;
   error?: { code: string; message: string; retryable: boolean };
   outcome?: "succeeded" | "failed";
   startedAt: number;
@@ -117,7 +118,7 @@ export function AskPanel() {
               ),
             };
           case "result":
-            return { ...turn, answer: event.payload.answer, frame: event.payload.frame };
+            return { ...turn, answer: event.payload.answer, frame: event.payload.frame ?? undefined, information: event.payload.information ?? undefined };
           case "error":
             return {
               ...turn,
@@ -145,7 +146,7 @@ export function AskPanel() {
     // Continue from the most recent turn that actually produced a table, not simply the
     // previous one: a question that failed in between must not throw away the analysis
     // the turns before it built.
-    const previous = [...turns].reverse().find((turn) => turn.frame);
+    const previous = [...turns].reverse().find((turn) => turn.frame && turn.outcome === "succeeded");
     setTurns((current) => [
       ...current,
       { id: turnId, question: asked, stages: [], startedAt: Date.now() },
@@ -192,7 +193,7 @@ export function AskPanel() {
       setTurns((current) =>
         current.map((turn) =>
           turn.id === turnId && !turn.outcome
-            ? { ...turn, outcome: turn.answer ? "succeeded" : "failed" }
+            ? { ...turn, outcome: "failed" }
             : turn,
         ),
       );
@@ -277,6 +278,8 @@ export function AskPanel() {
           return (
             <article
               className="scroll-mt-6 rounded-xl border border-slate-800 bg-slate-900/40 p-6 shadow-lg shadow-black/20"
+              data-outcome={turn.outcome}
+              data-version={turn.frame?.version}
               key={turn.id}
               ref={isLatest ? latestTurnRef : null}
             >
@@ -294,31 +297,26 @@ export function AskPanel() {
               ) : null}
 
               {turn.error ? (
-                // A tool that ran and produced a finding is not a failure, even though the
-                // contract has to deliver it on the error channel: ResultPayload requires
-                // an AnalysisFrame and a tool result does not have one yet. Presenting it
-                // in the failure colours tells the reader the opposite of what happened.
-                turn.error.code === "TOOL_RUN_NOT_RENDERABLE" ? (
-                  <div className="mt-5" aria-live="polite">
-                    <p className="whitespace-pre-wrap leading-relaxed text-slate-200">
-                      {turn.error.message}
-                    </p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      Araç çalıştı; sonucu henüz tablo veya grafik olarak gösterilemiyor.
-                    </p>
-                  </div>
-                ) : (
-                  <p
-                    className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200"
-                    role="alert"
-                  >
-                    {turn.error.message}
-                    <span className="mt-1 block text-xs text-amber-300/70">
-                      {turn.error.code}
-                      {turn.error.retryable ? " · tekrar denenebilir" : " · tekrar denemeyin"}
-                    </span>
-                  </p>
-                )
+                <p role="alert" className="mt-5 rounded-lg border border-amber-500/40 p-4 text-amber-200">
+                  {turn.error.message}
+                </p>
+              ) : null}
+              {turn.information ? (
+                <div className="mt-5 space-y-3" data-testid="information-result">
+                  <p>Kaynaklar · {turn.information.tool}</p>
+                  {turn.information.evidence.map((item, i) => (
+                    <div key={`${item.url}-${i}`}>
+                      {/^https?:\/\//i.test(item.url) ? (
+                        <a className="text-teal-300 underline" href={item.url} target="_blank" rel="noopener noreferrer">
+                          {item.title}
+                        </a>
+                      ) : <span>{item.title}</span>}
+                      <p className="break-all text-xs text-slate-400">{item.url}</p>
+                      {item.snippet ? <p className="whitespace-pre-wrap">{item.snippet}</p> : null}
+                    </div>
+                  ))}
+                  {turn.information.caveats.map((text, i) => <p key={i}>{text}</p>)}
+                </div>
               ) : null}
 
               {turn.answer ? <Answer answer={turn.answer} /> : null}

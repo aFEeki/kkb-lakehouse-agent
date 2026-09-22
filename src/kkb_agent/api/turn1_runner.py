@@ -18,6 +18,7 @@ import logging
 import re
 import unicodedata
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -33,6 +34,8 @@ from kkb_agent.api.contracts import (
     CompletionPayload,
     ErrorEvent,
     ErrorPayload,
+    EvidenceItem,
+    InformationalResult,
     ResultEvent,
     ResultPayload,
     StageEndEvent,
@@ -123,9 +126,21 @@ class TurnOneAskRunner:
     either refusing or disclosing.
     """
 
-    def __init__(self, catalog: Path | str, *, planner=None, frame_store=None):
+    def __init__(
+        self,
+        catalog: Path | str,
+        *,
+        planner=None,
+        frame_store=None,
+        web_search_tool=None,
+        url_fetcher=None,
+        retrieval=None,
+    ):
+        self._retrieval = retrieval
         self._catalog = catalog
         self._planner = planner
+        self._web_search_tool = web_search_tool
+        self._url_fetcher = url_fetcher
         self._frame_store = frame_store or AnalysisFrameStore()
 
     async def run(self, request: AskRequest) -> AsyncIterator[StreamEvent]:
@@ -202,7 +217,7 @@ class TurnOneAskRunner:
                     self._catalog,
                     # Stable on purpose: turns 2 and 3 continue this same table.
                     frame_id=request.analysis_id,
-                    planner=self._planner,
+                    planner=None,  # Published operations are already fixed and validated.
                     on_stage=on_stage,
                 )
             except BaseException as exc:  # surfaced as an error event, never as a 500
@@ -247,6 +262,8 @@ class TurnOneAskRunner:
             return
 
         result = outcome_or_error
+        if previous is None and result.frame.columns:
+            result = replace(result, frame=_with_charts(result.frame))
         self._frame_store.put(result.frame)
         yield _result(request, sequence, result)
         sequence += 1
@@ -254,13 +271,15 @@ class TurnOneAskRunner:
 
     async def _route(self, request: AskRequest, sequence: int):
         """Hand a non-published question to the tool router and stream what it did."""
+        yield _stage_start(request, sequence, "agentic_analytics")
+        sequence += 1
         client = getattr(self._planner, "_mia_client", None)
         choice = await asyncio.to_thread(select_tool, request.question, mia_client=client)
 
-        # Only open a stage when a tool was actually selected: a stage that starts and
-        # immediately fails reads as a broken product, where a bare refusal reads as an
-        # answer.
+        # Routing itself may await MIA: its stage must already be visible.
         if choice.tool is None:
+            yield _stage_end(request, sequence, "agentic_analytics", "failed")
+            sequence += 1
             yield _error(
                 request,
                 sequence,
@@ -274,8 +293,6 @@ class TurnOneAskRunner:
         # Announce the tool before running it, not after. The run reads a catalog series
         # and can take seconds; a stage that only appears once it is already over leaves
         # the screen empty for exactly as long as the work takes.
-        yield _stage_start(request, sequence, "agentic_analytics")
-        sequence += 1
         yield _tool_selected(request, sequence, _EVENT_NAME.get(choice.tool, choice.tool))
         sequence += 1
 
@@ -286,6 +303,9 @@ class TurnOneAskRunner:
             mia_client=client,
             planner=self._planner,
             choice=choice,
+            web_search_tool=self._web_search_tool,
+            fetcher=self._url_fetcher,
+            retrieval=self._retrieval,
             # Each routed question is its own table: asking about deposits after
             # housing loans is a new analysis, not a new version of the old one. Sharing
             # the id made every question after the first collide in the frame store.
@@ -303,9 +323,11 @@ class TurnOneAskRunner:
         if run.ran:
             frame = await asyncio.to_thread(_tool_frame, self._catalog, request.analysis_id, run)
             if frame is not None:
+                frame = _with_charts(frame)
                 self._frame_store.put(frame)
-                yield _frame_result(request, sequence, frame, _tool_summary(run))
-                yield _completion(request, sequence + 1, "succeeded", frame.version)
+                result_request = request.model_copy(update={"analysis_id": frame.frame_id})
+                yield _frame_result(result_request, sequence, frame, _tool_summary(run))
+                yield _completion(result_request, sequence + 1, "succeeded", frame.version)
                 return
 
         if run.choice.tool == "web_search" and run.ran:
@@ -314,13 +336,46 @@ class TurnOneAskRunner:
             yield _stage_end(request, sequence, "verification", "succeeded")
             sequence += 1
 
-        # Tool results have no AnalysisFrame yet, and ResultPayload requires one - so the
-        # outcome is reported on the error channel rather than faked into a frame.
+        if run.ran:
+            evidence = ()
+            caveats = ()
+            answer = _tool_summary(run)
+            if run.choice.tool == "web_search":
+                evidence = tuple(
+                    EvidenceItem(title=item.title or item.url, url=item.url, snippet=item.snippet)
+                    for item in run.result.items
+                )
+            elif run.choice.tool == "url_agent":
+                document = run.result
+                evidence = (
+                    EvidenceItem(
+                        title="Okunan kaynak",
+                        url=document.final_url,
+                        snippet=document.text[:2000] or None,
+                    ),
+                )
+                caveats = (f"Belge türü: {document.kind}; çıkarım: {document.extraction_method}.",)
+            if choice.chosen_by == "rules":
+                caveats += ("Araç deterministik kurallarla seçildi.",)
+            yield ResultEvent(
+                **_envelope(request, sequence),
+                type="result",
+                payload=ResultPayload(
+                    answer=answer,
+                    information=InformationalResult(
+                        tool=_EVENT_NAME.get(choice.tool, choice.tool),
+                        evidence=evidence,
+                        caveats=caveats,
+                    ),
+                ),
+            )
+            yield _completion(request, sequence + 1, "succeeded", request.version)
+            return
         yield _error(
             request,
             sequence,
-            code="TOOL_RUN_NOT_RENDERABLE" if run.ran else "TOOL_REFUSED",
-            message=_tool_message(run) if run.ran else (run.refusal or "Soru yanıtlanamadı."),
+            code="TOOL_REFUSED",
+            message=run.refusal or "Araç çalıştırılamadı.",
             retryable=False,
         )
         yield _completion(request, sequence + 1, "failed", request.version)
@@ -328,6 +383,20 @@ class TurnOneAskRunner:
 
 # The contract's tool vocabulary predates the router's; web_url is the same tool.
 _EVENT_NAME = {"url_agent": "web_url"}
+
+
+def _with_charts(frame):
+    from kkb_agent.tools.chart_selection import ChartSelectionError, select_chart
+
+    if frame.charts:
+        return frame
+    specs = []
+    for column in frame.columns:
+        try:
+            specs.append(select_chart(frame, column_keys=(column.key,)).spec)
+        except ChartSelectionError:
+            continue
+    return frame.model_copy(update={"charts": tuple(specs)})
 
 
 def _tool_frame(catalog, analysis_id: str, run) -> AnalysisFrame | None:
@@ -354,7 +423,8 @@ def _tool_frame(catalog, analysis_id: str, run) -> AnalysisFrame | None:
             return None
 
         frame = AnalysisFrame(
-            frame_id=analysis_id, spine=Spine(values=tuple(periods), label="Dönem")
+            frame_id=f"{analysis_id}-{uuid4().hex[:8]}",
+            spine=Spine(values=tuple(periods), label="Dönem"),
         )
         executor = create_operation_executor(series_source=source)
         for index, series_id in enumerate(run.series_ids):
@@ -385,7 +455,15 @@ def _tool_summary(run) -> str:
     """One Turkish line naming the tool, what it found, and on which series."""
     kind = type(run.result).__name__
     if kind == "Analysis":
-        return "\n".join(f.statement for f in run.result.frame.findings)
+        return "\n".join(
+            [
+                *(f.statement for f in run.result.frame.findings),
+                *run.result.caveats,
+                "Analiz deterministik kural tabanlı plan ile tamamlandı."
+                if run.result.planned_by == "script"
+                else "Analiz model destekli plan ile tamamlandı.",
+            ]
+        )
     if kind == "AnomalyResult":
         body = f"{len(run.result.anomalies)} aykırı gözlem ({run.result.observed_count} gözlemde)"
     elif kind == "ChangeDetectionResult":
@@ -450,7 +528,9 @@ def answer_text(result: TurnResult | TurnTwoResult | TurnThreeResult, question: 
         lines.append("Açıklanması gerekenler:")
         lines += [f"  ! {caveat}" for caveat in result.caveats]
     lines.append(
-        f"Plan: {result.planned_by}" + (f" ({', '.join(result.plan)})" if result.plan else "")
+        "Analiz deterministik plan ile tamamlandı."
+        if result.planned_by == "script"
+        else "Analiz model destekli plan ile tamamlandı."
     )
     return "\n".join(lines)
 

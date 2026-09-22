@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from datetime import UTC, datetime
 
+from openai import APITimeoutError
 from pydantic import ValidationError
 
 from kkb_agent.frame import (
@@ -28,6 +29,10 @@ class PlannerError(RuntimeError):
 
 class PlannerModelError(PlannerError):
     """The MIA model call failed before a response could be validated."""
+
+
+class PlannerTimeoutError(PlannerModelError):
+    """Actual model I/O timed out; callers may use their existing deterministic fallback."""
 
 
 class PlannerValidationError(PlannerError):
@@ -192,8 +197,10 @@ class OperationPlanner:
                 },
             )
             content = response.choices[0].message.content
-        except Exception as exc:
-            raise PlannerModelError(f"MIA operation planning call failed: {exc}") from exc
+        except APITimeoutError:
+            raise PlannerTimeoutError("MIA operation planning timed out") from None
+        except Exception:
+            raise PlannerModelError("MIA operation planning call failed") from None
         return content if isinstance(content, str) else ""
 
     @staticmethod

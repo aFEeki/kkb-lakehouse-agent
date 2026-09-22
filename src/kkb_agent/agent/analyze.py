@@ -8,6 +8,7 @@ executor and the frame contracts. Nothing here knows about housing loans.
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -15,9 +16,10 @@ from datetime import UTC, date, datetime
 import duckdb
 
 from kkb_agent.agent.composition import create_operation_executor
+from kkb_agent.agent.date_window import parse_window
 from kkb_agent.agent.findings import create_finding
-from kkb_agent.catalog.retrieval import build_concepts
-from kkb_agent.catalog.series_resolver import resolve_series
+from kkb_agent.agent.planner import PlannerTimeoutError
+from kkb_agent.catalog.hybrid import HybridRetrieval, RetrievalTrace
 from kkb_agent.catalog.series_source import CatalogSeriesSource
 from kkb_agent.frame import AddColumnParameters, AnalysisFrame, Operation, OperationType, Spine
 
@@ -26,6 +28,8 @@ CATALOG_COLUMNS = (
     "scale_factor, sector_scope, native_freq, aggregation_rule, province, currency_basis, "
     "nonzero_observations"
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_SERIES = 3
 
@@ -41,6 +45,11 @@ class Analysis:
     plan: tuple[str, ...] = ()
     caveats: tuple[str, ...] = ()
     elapsed_seconds: float = 0.0
+    retrieval_trace: RetrievalTrace | None = None
+
+
+class AmbiguousSeries(RuntimeError):
+    """A safe retrieval refusal, separate from provider or implementation failures."""
 
 
 class NothingToAnalyse(RuntimeError):
@@ -56,13 +65,13 @@ def _rows(connection) -> list[dict]:
     ]
 
 
-def _periods(connection, series_id: str) -> tuple[date, ...]:
+def _periods(connection, series_id: str, start=WINDOW_START, end=WINDOW_END) -> tuple[date, ...]:
     return tuple(
         r[0]
         for r in connection.execute(
             "SELECT period FROM series_observations WHERE series_id = ? "
             "AND period BETWEEN ? AND ? AND value IS NOT NULL ORDER BY period",
-            [series_id, WINDOW_START, WINDOW_END],
+            [series_id, start, end],
         ).fetchall()
     )
 
@@ -123,8 +132,10 @@ def analyze(
     planner=None,
     frame_id: str = "analysis",
     on_stage=None,
+    retrieval: HybridRetrieval | None = None,
 ) -> Analysis:
     """Resolve whatever the question names, plan over it, and compute what happened."""
+    start, end = parse_window(question, (WINDOW_START, WINDOW_END))
     started = time.perf_counter()
     notify = on_stage or (lambda *a, **k: None)
 
@@ -138,11 +149,10 @@ def analyze(
     try:
         with stage("data_discovery", tool="lakehouse"):
             rows = _rows(connection)
-            provinces = frozenset(r["province"] for r in rows if r.get("province"))
-            concepts = build_concepts(rows)
-            resolution = resolve_series(
-                concepts, question, candidates=rows, provinces=provinces, limit=8
-            )
+            retrieved = (retrieval or HybridRetrieval()).resolve(question, rows)
+            if retrieved.ambiguity is not None:
+                raise AmbiguousSeries(retrieved.ambiguity.user_message)
+            resolution = retrieved.resolution
             # Whether the question is about our data at all is the router's call, made by
             # the model. A retrieval score cannot decide it: measured across real
             # questions the ranges overlap - "Mevduat toplamı son 5 yılda nasıl değişti?"
@@ -159,7 +169,7 @@ def analyze(
             by_id = {r["series_id"]: r for r in rows}
 
         with stage("data_preparation"):
-            periods = _periods(connection, chosen[0])
+            periods = _periods(connection, chosen[0], start, end)
             if len(periods) < 2:
                 raise NothingToAnalyse(f"{chosen[0]} için yeterli gözlem yok")
             frame = AnalysisFrame(frame_id=frame_id, spine=Spine(values=periods, label="Dönem"))
@@ -172,7 +182,7 @@ def analyze(
             frame = _findings(frame, periods)
 
         with stage("verification"):
-            caveats = tuple(
+            caveats = (f"İstenen dönem: {start.isoformat()} – {end.isoformat()}.",) + tuple(
                 f"{key}: {by_id[sid].get('sector_scope') or 'kapsam belirtilmedi'}"
                 for key, sid in available.items()
                 if sid in by_id and by_id[sid].get("sector_scope")
@@ -188,6 +198,7 @@ def analyze(
         plan=plan,
         caveats=caveats,
         elapsed_seconds=time.perf_counter() - started,
+        retrieval_trace=retrieved.trace,
     )
 
 
@@ -215,12 +226,24 @@ def _plan_and_run(planner, source, frame, available: dict[str, str], question: s
             series_references=list(available.values()),
             column_keys=list(available),
         )
+        # This bounded initial analysis promises source-series comparisons only.
+        # Do not silently rebase/deflate a question that merely asks to show a series.
+        if not operations or len(operations) > MAX_SERIES:
+            raise ValueError("Unsupported generic plan")
+        for operation in operations:
+            if operation.kind is not OperationType.ADD_COLUMN or (
+                available.get(operation.parameters.column_key)
+                != operation.parameters.series_reference
+            ):
+                raise ValueError("Generic analysis requires the resolved source columns")
         executor = create_operation_executor(series_source=source)
         built = frame
         for operation in operations:
             built = executor.execute(built, operation)
         if built.columns:
             return built, "planner", tuple(str(o.kind) for o in operations)
+    except PlannerTimeoutError:
+        logger.info("operation_plan_path=model_timeout_fallback")
     except Exception:
-        pass
+        logger.info("operation_plan_path=model_error_fallback")
     return _plan_and_run(None, source, frame, available, question)

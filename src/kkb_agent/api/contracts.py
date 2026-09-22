@@ -2,7 +2,15 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, TypeAdapter, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
 from kkb_agent.frame import AnalysisFrame
 from kkb_agent.frame._base import Identifier, Timestamp, Version
@@ -62,11 +70,42 @@ class ToolSelectedPayload(APIContract):
     tool: ToolName
 
 
-class ResultPayload(APIContract):
-    """A self-contained, validated snapshot plus its evidence-bounded answer."""
+class EvidenceItem(APIContract):
+    title: str
+    url: str
+    snippet: str | None = None
 
-    frame: AnalysisFrame
+    @field_validator("url")
+    @classmethod
+    def safe_link(cls, value: str) -> str:
+        from urllib.parse import urlsplit
+
+        parsed = urlsplit(value)
+        if parsed.scheme not in ("https", "http") or not parsed.hostname:
+            raise ValueError("Evidence requires an HTTP(S) source URL")
+        if parsed.username or parsed.password or any(ord(c) < 32 for c in value):
+            raise ValueError("Unsafe evidence URL")
+        return value
+
+
+class InformationalResult(APIContract):
+    tool: ToolName
+    evidence: tuple[EvidenceItem, ...] = ()
+    caveats: tuple[str, ...] = ()
+
+
+class ResultPayload(APIContract):
+    """Exactly one analytical snapshot or provider-neutral informational result."""
+
+    frame: AnalysisFrame | None = None
     answer: Annotated[str, Field(strict=True, min_length=1)]
+    information: InformationalResult | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_result(self):
+        if (self.frame is None) == (self.information is None):
+            raise ValueError("Exactly one frame or informational result is required")
+        return self
 
 
 class ErrorPayload(APIContract):

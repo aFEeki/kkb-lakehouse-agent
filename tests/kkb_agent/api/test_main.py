@@ -52,7 +52,13 @@ def _ask_body():
 
 def test_health_without_external_credentials(settings):
     from kkb_agent.api.main import create_app
+    from kkb_agent.regression import build_snapshot_database
 
+    settings.duckdb_path.parent.mkdir(parents=True, exist_ok=True)
+    build_snapshot_database(
+        ROOT / "tests/fixtures/regression/published_three_turn_snapshot.json",
+        settings.duckdb_path,
+    )
     app = create_app(settings)
     with (
         patch("httpx.HTTPTransport.handle_request", side_effect=AssertionError("No network")),
@@ -65,6 +71,7 @@ def test_health_without_external_credentials(settings):
         assert response.json() == {
             "status": "ok",
             "components": {"application": "ok", "duckdb": "ok", "lancedb": "ok"},
+            "semantic_index": {"status": "empty", "enabled": False},
         }
         assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
         assert (
@@ -78,12 +85,18 @@ def test_health_without_external_credentials(settings):
 @pytest.mark.parametrize("component", ["duckdb", "lancedb"])
 def test_failure_is_sanitized_and_can_recover(settings, component):
     from kkb_agent.api.main import create_app
+    from kkb_agent.regression import build_snapshot_database
 
+    settings.duckdb_path.parent.mkdir(parents=True, exist_ok=True)
+    build_snapshot_database(
+        ROOT / "tests/fixtures/regression/published_three_turn_snapshot.json",
+        settings.duckdb_path,
+    )
     app = create_app(settings)
     with TestClient(app) as client:
         with patch.object(app.state.stores[component], "check", side_effect=RuntimeError("secret")):
             response = client.get("/health")
-            assert response.status_code == 503
+            assert response.status_code == (503 if component == "duckdb" else 200)
             assert response.json()["components"][component] == "error"
             assert "secret" not in response.text
         assert client.get("/health").status_code == 200

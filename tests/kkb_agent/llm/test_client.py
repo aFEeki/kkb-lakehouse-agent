@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from kkb_agent.llm.client import MIAClient
+from kkb_agent.llm.client import MODEL_TIMEOUT, MIAClient
 
 
 @pytest.mark.parametrize("key", ["", " ", "API_KEYINIZ"])
@@ -28,6 +28,8 @@ def test_configured_client_reuses_and_closes(settings):
         factory.assert_called_once_with(
             api_key="test-only-key",
             base_url="https://mia.csp.kloudeks.com/v1",
+            timeout=MODEL_TIMEOUT,
+            max_retries=0,
         )
         client.close()
         factory.return_value.close.assert_called_once()

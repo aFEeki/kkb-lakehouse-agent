@@ -1,4 +1,4 @@
-import type { AnalysisCell, AnalysisTableFrame, AnalysisUnit } from "@/lib/analysis-frame";
+import type { AnalysisCell, AnalysisLineage, AnalysisTableFrame, AnalysisUnit } from "@/lib/analysis-frame";
 import { exactNumber, formatNumber } from "@/lib/format";
 
 const scaleFormatter = new Intl.NumberFormat("tr-TR", {
@@ -11,6 +11,14 @@ function unitLabel(unit: AnalysisUnit | null): string {
     return "Birim: — · ölçek: —";
   }
   return `Birim: ${unit.symbol ?? "—"} · ölçek: ${scaleFormatter.format(unit.scale)}`;
+}
+
+function sources(lineage?: AnalysisLineage): string[] {
+  if (!lineage) return [];
+  return [...new Set([
+    ...lineage.sources.map((item) => `${item.source_type}: ${item.reference}`),
+    ...lineage.parents.flatMap((parent) => sources(parent.lineage)),
+  ])];
 }
 
 function CellValue({ value }: { value: AnalysisCell }) {
@@ -66,6 +74,12 @@ export function AnalysisTable({ frame }: { frame: AnalysisTableFrame }) {
                   <span className="mt-1 block text-xs font-normal text-slate-400">
                     {unitLabel(column.unit)}
                   </span>
+                  {column.lineage ? (
+                    <details className="mt-1 max-w-xs whitespace-normal text-xs font-normal">
+                      <summary className="cursor-pointer">Veri kaynağı</summary>
+                      {sources(column.lineage).map((source) => <p key={source} className="break-all">{source}</p>)}
+                    </details>
+                  ) : null}
                 </th>
               ))}
             </tr>
