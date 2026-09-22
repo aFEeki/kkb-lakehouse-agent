@@ -137,7 +137,7 @@ hesaplanır, birimi veya birikim kipi çözülemeyen seri sunulmaz.
 
 | Kaynak | Seri | Kapsam |
 |---|---|---|
-| BDDK FinTürk — İllere Göre | 41.522 | 2021-03 → 2026-06, 82 il |
+| BDDK FinTürk — İllere Göre | 41.522 | 2021-03 → 2026-06, 81 il + yurt dışı |
 | BDDK Aylık Bülten | 4.960 | 2021-01 → 2026-06 |
 | BDDK Haftalık Bülten | 283 | 2021-01 → 2026-06 |
 | TCMB EVDS | 250 | 2021-01 → 2026-06 |
